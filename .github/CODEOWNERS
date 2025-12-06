@@ -1,0 +1,6 @@
+# Tüm repo için proje sahibi (senin kullanıcı adın)
+* @ozgetontu
+
+# Frontend kodu için sorumlular (kullanıcı adlarını virgülle ayırabilirsiniz)
+# Örnek: src/ altındaki her dosya için bu kullanıcılar otomatik review ister
+/src/ @ozgetontu @iremnr26

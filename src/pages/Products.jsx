@@ -1,0 +1,9 @@
+const Products = () => {
+  return (
+    <div>
+      <h1>Products Sayfası</h1>
+    </div>
+  );
+};
+
+export default Products;

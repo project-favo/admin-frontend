@@ -1,0 +1,164 @@
+.settings-page {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (min-width: 769px) {
+  .admin-main .settings-page {
+    padding-top: max(
+      0px,
+      calc(
+        var(--admin-sidebar-pad-top) +
+          (var(--admin-sidebar-title-line-height) * var(--admin-sidebar-title-font)) +
+          var(--admin-sidebar-rule-margin-top) -
+          40px
+      )
+    );
+  }
+}
+
+.settings-main-title {
+  margin: 0 0 clamp(1.5rem, 4vw, 2.5rem);
+  text-align: left;
+  color: #910029;
+  font-size: clamp(1.5rem, 3vw, 36px);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(1rem, 3vw, 1.5rem);
+  align-items: start;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1rem, 3vw, 1.5rem);
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-card {
+  margin: 0;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+  background: #d9d9d9;
+  border-radius: 20px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.settings-card-title {
+  margin: 0 0 clamp(1rem, 2.5vw, 1.5rem);
+  text-align: center;
+  color: #910029;
+  font-size: clamp(1.1rem, 2.2vw, 28px);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+}
+
+.settings-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+}
+
+.settings-row-label {
+  color: #910029;
+  font-size: clamp(1rem, 1.8vw, 22px);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+}
+
+.settings-row-value {
+  color: #3b3b3b;
+  font-size: clamp(1rem, 1.8vw, 22px);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  word-break: break-word;
+}
+
+.settings-row-control {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.settings-select {
+  appearance: auto;
+  max-width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(59, 59, 59, 0.35);
+  border-radius: 8px;
+  background: #fff;
+  color: #3b3b3b;
+  font-size: clamp(0.95rem, 1.6vw, 20px);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.settings-select:focus {
+  outline: 2px solid #910029;
+  outline-offset: 2px;
+}
+
+.settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.65rem 1rem;
+  border: none;
+  border-radius: 10px;
+  background: #910029;
+  color: #c4c4c4;
+  font-size: clamp(1rem, 2vw, 28px);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.settings-btn:hover {
+  background: #7a0023;
+  color: #e8e8e8;
+}
+
+.settings-btn:focus-visible {
+  outline: 2px solid #910029;
+  outline-offset: 3px;
+}
+
+.settings-btn--secondary {
+  margin-top: 0;
+}

@@ -1,0 +1,180 @@
+.login-container {
+  --login-pad: clamp(1.5rem, 4vw, 3rem);
+  --login-inner-w: calc(100vw - 2 * var(--login-pad));
+  --login-logo-w: min(220px, 22vw);
+  --login-logo-h: min(220px, 32vh);
+  /* Ortalanmış blokun sol kenarının viewport’a uzaklığı (yaklaşık) */
+  --login-left-free: calc(
+    var(--login-pad) + max(0px, (var(--login-inner-w) - 900px) / 2)
+  );
+
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: var(--login-pad);
+  box-sizing: border-box;
+  background: #ecf4f7;
+  overflow-x: hidden;
+}
+
+.login-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 900px;
+  box-sizing: border-box;
+  gap: clamp(1.25rem, 3vw, 2rem);
+  /* Genişlik azalınca sol üstteki logo ile metin çakışmasın (akışkan boşluk) */
+  padding-left: max(
+    0px,
+    calc(var(--login-logo-w) + 0.75rem - var(--login-left-free))
+  );
+  /* Dikey: ortalanmış blok üstte logonun alanına girmesin */
+  padding-top: max(
+    0px,
+    min(
+      5rem,
+      calc(var(--login-logo-h) + 0.5rem - (50vh - min(16rem, 42vh)))
+    )
+  );
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
+.login-header {
+  width: 100%;
+  max-width: 839px;
+  text-align: left;
+  align-self: center;
+}
+
+.login-title-main {
+  margin: 0;
+  color: #910029;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.login-title-sub {
+  margin: 0.75rem 0 0;
+  color: #910029;
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 839px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  background: #f5f5f5;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.input-field {
+  width: 100%;
+  max-width: 439px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  text-align: left;
+}
+
+.input-label {
+  color: #910029;
+  font-size: clamp(1rem, 2vw, 1.5rem);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+}
+
+.input-box {
+  width: 100%;
+  height: 60px;
+  background: #d9d9d9;
+  border-radius: 10px;
+  border: 1px solid #a8a8a8;
+  padding-left: 18px;
+  font-size: 1rem;
+}
+
+.input-box::placeholder {
+  color: #666;
+}
+
+.login-button {
+  width: 100%;
+  max-width: 322px;
+  height: 60px;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #910028;
+  border-radius: 10px;
+  border: none;
+  color: #fff;
+  font-size: clamp(1.25rem, 2.5vw, 2rem);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.login-button:hover {
+  filter: brightness(1.05);
+}
+
+.login-logo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 0;
+  width: var(--login-logo-w);
+  height: auto;
+  max-height: var(--login-logo-h);
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* Bu genişliğin altında logo akışta (altta); çakışma olmaz */
+@media (max-width: 1100px) {
+  .login-center {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    width: 100%;
+    max-width: 900px;
+    flex-shrink: 0;
+    padding: 0;
+  }
+
+  .login-logo {
+    position: static;
+    width: min(160px, 38vw);
+    max-height: none;
+    margin-top: 0.35rem;
+    flex-shrink: 0;
+  }
+}

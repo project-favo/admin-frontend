@@ -3,7 +3,6 @@
   --login-inner-w: calc(100vw - 2 * var(--login-pad));
   --login-logo-w: min(220px, 22vw);
   --login-logo-h: min(220px, 32vh);
-  /* Ortalanmış blokun sol kenarının viewport’a uzaklığı (yaklaşık) */
   --login-left-free: calc(
     var(--login-pad) + max(0px, (var(--login-inner-w) - 900px) / 2)
   );
@@ -37,12 +36,10 @@
   max-width: 900px;
   box-sizing: border-box;
   gap: clamp(1.25rem, 3vw, 2rem);
-  /* Genişlik azalınca sol üstteki logo ile metin çakışmasın (akışkan boşluk) */
   padding-left: max(
     0px,
     calc(var(--login-logo-w) + 0.75rem - var(--login-left-free))
   );
-  /* Dikey: ortalanmış blok üstte logonun alanına girmesin */
   padding-top: max(
     0px,
     min(
@@ -157,7 +154,6 @@
   pointer-events: none;
 }
 
-/* Bu genişliğin altında logo akışta (altta); çakışma olmaz */
 @media (max-width: 1100px) {
   .login-center {
     position: relative;

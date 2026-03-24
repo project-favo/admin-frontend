@@ -1,0 +1,73 @@
+.users-table-wrap {
+  width: 100%;
+  max-width: 1119px;
+  padding: 20px 16px;
+  background: #d9d9d9;
+  border-radius: 20px;
+  box-sizing: border-box;
+}
+
+.users-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.users-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.users-table thead th {
+  color: #000;
+  font-size: clamp(1rem, 1.8vw, 24px);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-align: center;
+  vertical-align: bottom;
+  padding: 0 8px 12px;
+  border-bottom: 1px solid #000;
+}
+
+.users-table tbody td {
+  color: #000;
+  font-size: clamp(0.9rem, 1.5vw, 20px);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-align: center;
+  vertical-align: middle;
+  padding: 16px 8px;
+  word-break: break-word;
+}
+
+.users-table-col-avatar {
+  width: 85px;
+}
+
+.users-table-col-username {
+  width: 22%;
+}
+
+.users-table-col-email {
+  width: 32%;
+}
+
+.users-table-col-status {
+  width: 18%;
+}
+
+.users-table-col-actions {
+  width: 72px;
+}
+
+@media (max-width: 768px) {
+  .users-table thead th,
+  .users-table tbody td {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+}

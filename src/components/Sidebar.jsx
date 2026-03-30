@@ -1,10 +1,20 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 import '../styles/Sidebar.css';
 
 const navLinkClass = ({ isActive }) =>
   `admin-nav-link${isActive ? ' admin-nav-link--active' : ''}`;
 
 const Sidebar = () => {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = async (e) => {
+    e.preventDefault();
+    await logout();
+    navigate('/', { replace: true });
+  };
+
   return (
     <aside className="admin-sidebar">
       <h1 className="admin-sidebar-title">FAVO Admin</h1>
@@ -30,9 +40,9 @@ const Sidebar = () => {
 
       <div className="admin-nav-spacer" aria-hidden />
 
-      <NavLink className="admin-logout" to="/">
+      <button type="button" className="admin-logout" onClick={handleLogout}>
         Log out
-      </NavLink>
+      </button>
     </aside>
   );
 };

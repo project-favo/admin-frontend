@@ -142,6 +142,26 @@
   filter: brightness(1.05);
 }
 
+.login-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.login-error {
+  width: 100%;
+  max-width: 439px;
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  background: #fde8ec;
+  border: 1px solid #e8a8b8;
+  color: #6b1028;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  text-align: left;
+}
+
 .login-logo {
   position: absolute;
   left: 0;

@@ -1,10 +1,12 @@
 import '../styles/Dashboard.css';
+import { useEffect, useMemo, useState } from 'react';
+import { listAdminUsers } from '../api/adminApi';
 
 const DASHBOARD_METRICS_PLACEHOLDER = [
   {
     id: 'total-users',
     label: 'Total Users',
-    value: '12,450',
+    value: '',
     deltaPrimary: '+5.2',
     deltaSecondary: '% this week',
     labelMultiline: false,
@@ -49,13 +51,71 @@ const MOCK_FLAGGED_CONTENT = [
   },
 ];
 
+function formatInteger(value) {
+  if (value == null) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
+}
+
 const Dashboard = () => {
+  const [totalUsers, setTotalUsers] = useState(null);
+  const [totalUsersLoading, setTotalUsersLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await listAdminUsers({
+          page: 0,
+          size: 1,
+          activeOnly: true,
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const dto = await res.json();
+        const total = dto?.totalElements;
+        if (alive) setTotalUsers(typeof total === 'number' ? total : Number(total));
+      } catch {
+        // ignore (keep placeholder)
+      } finally {
+        if (alive) setTotalUsersLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+  }, []);
+
+  const metrics = useMemo(() => {
+    return DASHBOARD_METRICS_PLACEHOLDER.map((m) => {
+      if (m.id !== 'total-users') return m;
+      const formatted = formatInteger(totalUsers);
+      if (totalUsersLoading && formatted == null) {
+        return {
+          ...m,
+          value: 'Loading…',
+          deltaPrimary: '—',
+          deltaSecondary: '',
+        };
+      }
+      return {
+        ...m,
+        value: formatted ?? m.value,
+        deltaPrimary: formatted == null ? m.deltaPrimary : '—',
+        deltaSecondary: formatted == null ? m.deltaSecondary : '% this week',
+      };
+    });
+  }, [totalUsers, totalUsersLoading]);
+
   return (
     <div className="dashboard">
       <h2 className="dashboard-main-title">Dashboard Overview</h2>
 
       <section className="dashboard-stats" aria-label="Key metrics">
-        {DASHBOARD_METRICS_PLACEHOLDER.map(
+        {metrics.map(
           ({ id, label, value, deltaPrimary, deltaSecondary, labelMultiline }) => (
             <div key={id} className="dashboard-stat">
               <div className="dashboard-stat-chart">

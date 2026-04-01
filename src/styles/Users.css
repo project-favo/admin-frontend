@@ -52,6 +52,26 @@
   cursor: default;
 }
 
+.users-loading {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 220px;
+  margin: 12px 0 6px;
+  color: #910029;
+  font-family: 'Abril Fatface', serif;
+  letter-spacing: 0.03em;
+}
+
+.users-loading img {
+  width: 120px;
+  height: 28px;
+}
+
+.users-loading-text {
+  font-size: 18px;
+}
+
 .users-footer {
   display: flex;
   flex-wrap: wrap;
@@ -104,4 +124,11 @@
   min-width: 2rem;
   padding: 10px;
   text-align: center;
+  text-decoration: none;
+}
+
+.users-pagination-page--active {
+  text-decoration: underline;
+  text-underline-offset: 6px;
+  text-decoration-thickness: 2px;
 }

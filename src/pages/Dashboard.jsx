@@ -1,6 +1,6 @@
 import '../styles/Dashboard.css';
 import { useEffect, useMemo, useState } from 'react';
-import { listAdminUsers } from '../api/adminApi';
+import { listAdminReviews, listAdminUsers } from '../api/adminApi';
 
 const DASHBOARD_METRICS_PLACEHOLDER = [
   {
@@ -14,9 +14,9 @@ const DASHBOARD_METRICS_PLACEHOLDER = [
   {
     id: 'daily-reviews',
     label: 'Daily Reviews',
-    value: '845',
+    value: '',
     deltaPrimary: '+12',
-    deltaSecondary: '% this week',
+    deltaSecondary: 'vs yesterday',
     labelMultiline: false,
   },
   {
@@ -61,6 +61,9 @@ function formatInteger(value) {
 const Dashboard = () => {
   const [totalUsers, setTotalUsers] = useState(null);
   const [totalUsersLoading, setTotalUsersLoading] = useState(true);
+  const [dailyReviewsToday, setDailyReviewsToday] = useState(null);
+  const [dailyReviewsDeltaPct, setDailyReviewsDeltaPct] = useState(null);
+  const [dailyReviewsLoading, setDailyReviewsLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
@@ -89,26 +92,116 @@ const Dashboard = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterdayStart = new Date(todayStart);
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+        const tomorrowStart = new Date(todayStart);
+        tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+        let page = 0;
+        let totalPages = 1;
+        let todayCount = 0;
+        let yesterdayCount = 0;
+        const maxPages = 25;
+
+        while (page < totalPages && page < maxPages) {
+          const res = await listAdminReviews({
+            page,
+            size: 100,
+            activeOnly: true,
+            signal: controller.signal,
+          });
+          if (!res.ok) return;
+          const dto = await res.json();
+          totalPages = Number(dto?.totalPages ?? totalPages);
+          const content = Array.isArray(dto?.content) ? dto.content : [];
+
+          for (const r of content) {
+            const raw = r?.createdAt ?? r?.created_at ?? r?.createdDate ?? r?.created_date;
+            if (!raw) continue;
+            const d = raw instanceof Date ? raw : new Date(raw);
+            if (Number.isNaN(d.getTime())) continue;
+            if (d >= todayStart && d < tomorrowStart) todayCount += 1;
+            else if (d >= yesterdayStart && d < todayStart) yesterdayCount += 1;
+          }
+          page += 1;
+        }
+
+        if (!alive) return;
+        setDailyReviewsToday(todayCount);
+        if (yesterdayCount <= 0) {
+          setDailyReviewsDeltaPct(null);
+        } else {
+          setDailyReviewsDeltaPct(((todayCount - yesterdayCount) / yesterdayCount) * 100);
+        }
+      } catch {
+        // ignore (keep placeholder)
+      } finally {
+        if (alive) setDailyReviewsLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+      controller.abort();
+    };
+  }, []);
+
   const metrics = useMemo(() => {
     return DASHBOARD_METRICS_PLACEHOLDER.map((m) => {
-      if (m.id !== 'total-users') return m;
-      const formatted = formatInteger(totalUsers);
-      if (totalUsersLoading && formatted == null) {
+      if (m.id === 'total-users') {
+        const formatted = formatInteger(totalUsers);
+        if (totalUsersLoading && formatted == null) {
+          return {
+            ...m,
+            value: 'Loading…',
+            deltaPrimary: '—',
+            deltaSecondary: '',
+          };
+        }
         return {
           ...m,
-          value: 'Loading…',
-          deltaPrimary: '—',
-          deltaSecondary: '',
+          value: formatted ?? m.value,
+          deltaPrimary: formatted == null ? m.deltaPrimary : '—',
+          deltaSecondary: formatted == null ? m.deltaSecondary : '% this week',
         };
       }
-      return {
-        ...m,
-        value: formatted ?? m.value,
-        deltaPrimary: formatted == null ? m.deltaPrimary : '—',
-        deltaSecondary: formatted == null ? m.deltaSecondary : '% this week',
-      };
+      if (m.id === 'daily-reviews') {
+        const formatted = formatInteger(dailyReviewsToday);
+        if (dailyReviewsLoading && formatted == null) {
+          return {
+            ...m,
+            value: 'Loading…',
+            deltaPrimary: '—',
+            deltaSecondary: '',
+          };
+        }
+        const pct = dailyReviewsDeltaPct;
+        const pctLabel =
+          typeof pct === 'number' && Number.isFinite(pct)
+            ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
+            : '—';
+        return {
+          ...m,
+          value: formatted ?? m.value,
+          deltaPrimary: formatted == null ? m.deltaPrimary : pctLabel,
+          deltaSecondary: formatted == null ? m.deltaSecondary : 'vs yesterday',
+        };
+      }
+      return m;
     });
-  }, [totalUsers, totalUsersLoading]);
+  }, [
+    dailyReviewsDeltaPct,
+    dailyReviewsLoading,
+    dailyReviewsToday,
+    totalUsers,
+    totalUsersLoading,
+  ]);
 
   return (
     <div className="dashboard">

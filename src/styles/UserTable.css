@@ -44,6 +44,69 @@
   word-break: break-word;
 }
 
+.users-actions {
+  position: relative;
+  display: inline-block;
+}
+
+.users-actions > summary {
+  list-style: none;
+}
+.users-actions > summary::-webkit-details-marker {
+  display: none;
+}
+
+.users-actions-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.users-actions-trigger:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.users-actions-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 120px;
+  padding: 8px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.14);
+}
+
+.users-actions-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #000;
+  font-size: 16px;
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.users-actions-item:hover:not(:disabled) {
+  background: rgba(145, 0, 41, 0.08);
+}
+
+.users-actions-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .users-table-col-avatar {
   width: 85px;
 }

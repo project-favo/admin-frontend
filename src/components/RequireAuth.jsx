@@ -7,7 +7,7 @@ export default function RequireAuth() {
   if (loading) {
     return (
       <div className="auth-loading" role="status" aria-live="polite">
-        Yükleniyor…
+        Loading…
       </div>
     );
   }

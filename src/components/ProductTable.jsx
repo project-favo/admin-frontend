@@ -11,21 +11,35 @@ import { useEffect, useId, useState } from 'react';
  */
 
 /**
- * @param {boolean|null} active
- * @returns {'active' | 'inactive' | 'unknown'}
+ * @param {{
+ *   products: ProductTableRow[];
+ *   onView: (id: string) => void;
+ *   onEdit: (id: string) => void;
+ *   onActivate: (id: string) => void;
+ *   onDeactivate: (id: string) => void;
+ *   onDelete: (id: string) => void;
+ *   actionBusyId: string | null;
+ * }} props
  */
-function getProductActivityKind(active) {
-  if (active === true) return 'active';
-  if (active === false) return 'inactive';
-  return 'unknown';
-}
-
-/**
- * @param {{ products: ProductTableRow[] }} props
- */
-const ProductTable = ({ products }) => {
+const ProductTable = ({
+  products,
+  onView,
+  onEdit,
+  onActivate,
+  onDeactivate,
+  onDelete,
+  actionBusyId,
+}) => {
   const menuIdPrefix = useId();
   const [openRowId, setOpenRowId] = useState(null);
+
+  const busy = actionBusyId != null;
+
+  /** @param {() => void} fn */
+  function runAndClose(fn) {
+    fn();
+    setOpenRowId(null);
+  }
 
   useEffect(() => {
     if (openRowId == null) return undefined;
@@ -70,7 +84,8 @@ const ProductTable = ({ products }) => {
           </thead>
           <tbody>
             {products.map(({ id, name, category, status, active }) => {
-              const kind = getProductActivityKind(active ?? null);
+              /** Pasif satırlar: yalnızca Activate + Delete. Aktif veya bilinmeyen: View, Edit, Deactivate + Delete. */
+              const isInactive = active === false;
               const menuId = `${menuIdPrefix}-${id}`;
               const isOpen = openRowId === id;
               return (
@@ -102,55 +117,48 @@ const ProductTable = ({ products }) => {
                         ⋮
                       </summary>
                       <div id={menuId} className="products-actions-menu" role="menu">
-                        <button type="button" className="products-actions-item" role="menuitem">
-                          Edit
-                        </button>
-                        <button type="button" className="products-actions-item" role="menuitem">
-                          View
-                        </button>
-                        {kind === 'active' && (
+                        {!isInactive && (
                           <>
                             <button
                               type="button"
                               className="products-actions-item"
                               role="menuitem"
+                              disabled={busy}
+                              onClick={() => runAndClose(() => onView(id))}
+                            >
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              className="products-actions-item"
+                              role="menuitem"
+                              disabled={busy}
+                              onClick={() => runAndClose(() => onEdit(id))}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="products-actions-item"
+                              role="menuitem"
+                              disabled={busy}
+                              onClick={() => runAndClose(() => onDeactivate(id))}
                             >
                               Deactivate
                             </button>
-                            <button
-                              type="button"
-                              className="products-actions-item"
-                              role="menuitem"
-                            >
-                              Hide
-                            </button>
                           </>
                         )}
-                        {kind === 'inactive' && (
-                          <>
-                            <button
-                              type="button"
-                              className="products-actions-item"
-                              role="menuitem"
-                            >
-                              Aktifleştir (Activate)
-                            </button>
-                            <button
-                              type="button"
-                              className="products-actions-item"
-                              role="menuitem"
-                            >
-                              Yayınla (Publish)
-                            </button>
-                          </>
+                        {isInactive && (
+                          <button
+                            type="button"
+                            className="products-actions-item"
+                            role="menuitem"
+                            disabled={busy}
+                            onClick={() => runAndClose(() => onActivate(id))}
+                          >
+                            Activate
+                          </button>
                         )}
-                        <button
-                          type="button"
-                          className="products-actions-item products-actions-item--danger"
-                          role="menuitem"
-                        >
-                          Delete
-                        </button>
                       </div>
                     </details>
                   </td>

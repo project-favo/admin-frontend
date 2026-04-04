@@ -132,3 +132,144 @@
   text-underline-offset: 6px;
   text-decoration-thickness: 2px;
 }
+
+.products-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+.products-modal {
+  width: min(100%, 520px);
+  max-height: min(90vh, 640px);
+  overflow: auto;
+  padding: 20px 22px 22px;
+  border-radius: 16px;
+  background: #fff;
+  color: #000;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+  font-family: 'Abril Fatface', serif;
+  letter-spacing: 0.03em;
+}
+
+.products-modal h3 {
+  margin: 0 0 14px;
+  color: #910029;
+  font-size: 1.35rem;
+  font-weight: 400;
+}
+
+.products-modal-body {
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.products-modal-body dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 8px 12px;
+}
+
+.products-modal-body dt {
+  margin: 0;
+  color: #444;
+  font-weight: 400;
+}
+
+.products-modal-body dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.products-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.products-modal-actions button {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  background: #fff;
+  color: #000;
+  font-family: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.products-modal-actions button:hover {
+  background: rgba(145, 0, 41, 0.08);
+}
+
+.products-modal-field {
+  margin-bottom: 12px;
+}
+
+.products-modal-field label {
+  display: block;
+  margin-bottom: 4px;
+  color: #444;
+  font-size: 0.9rem;
+}
+
+.products-modal-field input,
+.products-modal-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  font-family: system-ui, sans-serif;
+  font-size: 0.95rem;
+}
+
+.products-modal-field textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.products-modal-view-image-block {
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.products-modal-view-image {
+  display: block;
+  max-width: 100%;
+  max-height: min(50vh, 280px);
+  width: auto;
+  height: auto;
+  margin: 0 auto 10px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #f5f5f5;
+}
+
+.products-modal-view-image-fallback {
+  margin: 0 0 10px;
+  color: #666;
+  font-family: system-ui, sans-serif;
+  font-size: 0.9rem;
+}
+
+.products-modal-image-link {
+  display: inline-block;
+  font-family: system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: #910029;
+  word-break: break-all;
+}
+
+.products-modal-image-link:hover {
+  text-decoration: underline;
+}

@@ -76,6 +76,109 @@ export async function listAdminProducts({
 }
 
 /**
+ * Admin: GET /api/admin/products/{id} — pasif ürünler dahil detay.
+ * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/controller/AdminController.java
+ */
+export async function getAdminProduct(id, { signal } = {}) {
+  return apiFetch(`/api/admin/products/${encodeURIComponent(String(id))}`, {
+    method: 'GET',
+    signal,
+  });
+}
+
+/**
+ * Admin: PATCH /api/admin/products/{id}/activate — ürünü tekrar yayında gösterir (isActive=true).
+ * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/controller/AdminController.java
+ */
+export async function patchAdminProductActivate(id, { signal } = {}) {
+  return apiFetch(`/api/admin/products/${encodeURIComponent(String(id))}/activate`, {
+    method: 'PATCH',
+    signal,
+  });
+}
+
+/**
+ * Admin: PATCH /api/admin/products/{id}/deactivate — katalogda gizler (soft, isActive=false).
+ * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/controller/AdminController.java
+ */
+export async function patchAdminProductDeactivate(id, { signal } = {}) {
+  return apiFetch(`/api/admin/products/${encodeURIComponent(String(id))}/deactivate`, {
+    method: 'PATCH',
+    signal,
+  });
+}
+
+/**
+ * ✏️ Product güncelle — PUT /api/products/{id}
+ *
+ * Partial update: yalnızca JSON’da gönderilen alanlar güncellenir (ProductRequestDto).
+ * Body (hepsi opsiyonel): { name?, description?, imageURL?, tagId? } — tagId leaf tag olmalı.
+ * Response: 200 OK + ProductResponseDto. RBAC: ADMIN.
+ *
+ * @see ProductController (updateProduct @PutMapping)
+ */
+export async function putProduct(id, body, { signal } = {}) {
+  return apiFetch(`/api/products/${encodeURIComponent(String(id))}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+    signal,
+  });
+}
+
+/**
+ * Edit formundan ProductRequestDto gövdesi: gönderilen alanlar backend’de güncellenir.
+ * @param {{ name: string, description: string, imageURL: string, tagId: string }} fields
+ */
+export function buildProductUpdateBody(fields) {
+  const name = typeof fields.name === 'string' ? fields.name.trim() : '';
+  const description =
+    typeof fields.description === 'string' ? fields.description.trim() : '';
+  const imageURL = typeof fields.imageURL === 'string' ? fields.imageURL.trim() : '';
+  const tagStr = typeof fields.tagId === 'string' ? fields.tagId.trim() : '';
+
+  const body = {};
+  if (name) body.name = name;
+  body.description = description;
+  body.imageURL = imageURL;
+  const tid = Number(tagStr);
+  if (tagStr !== '' && Number.isFinite(tid)) body.tagId = tid;
+
+  return body;
+}
+
+/**
+ * Başarısız fetch cevabından okunabilir mesaj (Spring JSON veya düz metin).
+ */
+export async function messageFromFailedResponse(res) {
+  const text = await res.text();
+  if (!text) return `Request failed (${res.status})`;
+  try {
+    const j = JSON.parse(text);
+    if (typeof j === 'string') return j;
+    return (
+      j.message ||
+      j.error ||
+      j.detail ||
+      (Array.isArray(j.errors) ? j.errors.map((e) => e?.defaultMessage || e).join('; ') : null) ||
+      text
+    );
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * Admin: DELETE /api/products/{id} — soft delete; ilişkili review’lar da pasifleşir.
+ */
+export async function deleteProduct(id, { signal } = {}) {
+  return apiFetch(`/api/products/${encodeURIComponent(String(id))}`, {
+    method: 'DELETE',
+    signal,
+  });
+}
+
+/**
  * Admin: review’ı arayüzden kaldırır (soft delete).
  * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/controller/AdminController.java
  */

@@ -1,7 +1,11 @@
 import '../styles/Users.css';
 import UserTable from '../components/UserTable';
 import { useEffect, useMemo, useState } from 'react';
-import { listAdminUsers } from '../api/adminApi';
+import {
+  listAdminUsers,
+  patchAdminUserActivate,
+  patchAdminUserDeactivate,
+} from '../api/adminApi';
 import loadingDots from '../assets/loading-dots.svg';
 
 function formatInteger(value) {
@@ -56,6 +60,34 @@ const Users = () => {
   const [totalPages, setTotalPages] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [listRefreshKey, setListRefreshKey] = useState(0);
+  const [actionFeedback, setActionFeedback] = useState(null);
+
+  /** @param {string} userId @param {'activate' | 'suspend'} action */
+  async function handleUserAction(userId, action) {
+    setActionFeedback(null);
+    try {
+      let res;
+      if (action === 'activate') {
+        res = await patchAdminUserActivate(userId);
+      } else {
+        res = await patchAdminUserDeactivate(userId);
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(body.trim() || `Request failed (${res.status})`);
+      }
+      const label = action === 'activate' ? 'activated' : 'suspended';
+      setActionFeedback({ ok: true, message: `User ${label}.` });
+      setListRefreshKey((k) => k + 1);
+    } catch (e) {
+      setActionFeedback({
+        ok: false,
+        message: e instanceof Error ? e.message : 'Action failed.',
+      });
+      throw e;
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -117,7 +149,7 @@ const Users = () => {
       alive = false;
       controller.abort();
     };
-  }, [filter, page, size]);
+  }, [filter, page, size, listRefreshKey]);
 
   const formattedTotal = useMemo(() => formatInteger(totalElements), [totalElements]);
   const showingFrom = totalElements == null ? 0 : page * size + (users.length > 0 ? 1 : 0);
@@ -164,13 +196,25 @@ const Users = () => {
         </div>
       )}
 
+      {actionFeedback && (
+        <div
+          role="status"
+          style={{
+            margin: '12px 0',
+            color: actionFeedback.ok ? 'var(--users-accent, inherit)' : 'crimson',
+          }}
+        >
+          {actionFeedback.message}
+        </div>
+      )}
+
       {loading ? (
         <div className="users-loading" aria-live="polite" aria-busy="true">
           <img src={loadingDots} alt="Loading" />
           <div className="users-loading-text">Loading users…</div>
         </div>
       ) : (
-        <UserTable users={users} />
+        <UserTable users={users} onUserAction={handleUserAction} />
       )}
 
       <footer className="users-footer">

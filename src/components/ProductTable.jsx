@@ -75,9 +75,7 @@ const ProductTable = ({ products }) => {
               const isOpen = openRowId === id;
               return (
                 <tr key={id}>
-                  <td className="products-table-cell-image">
-                    <span aria-hidden>🖼️</span>
-                  </td>
+                  <td>🖼️</td>
                   <td>{name}</td>
                   <td>{category}</td>
                   <td>{status}</td>

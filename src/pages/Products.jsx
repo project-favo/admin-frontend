@@ -1,7 +1,7 @@
 import '../styles/Products.css';
 import ProductTable from '../components/ProductTable';
 import { useEffect, useMemo, useState } from 'react';
-import { listProducts } from '../api/adminApi';
+import { listAdminProducts } from '../api/adminApi';
 import loadingDots from '../assets/loading-dots.svg';
 
 function formatInteger(value) {
@@ -16,14 +16,14 @@ function toCategoryLabel(product) {
   const path = tag?.categoryPath;
   if (path && typeof path === 'string') {
     const parts = path.split('.').filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1];
+    if (parts.length > 0) return parts[0];
   }
   const name = tag?.name;
   return name ? String(name) : '—';
 }
 
 function toStatusLabel(product) {
-  const active = product?.isActive ?? product?.active;
+  const active = product?.isActive ?? product?.active ?? product?.is_active;
   if (active === true) return '🟢 Active';
   if (active === false) return '🔴 Inactive';
   return '—';
@@ -50,7 +50,9 @@ function getVisiblePages({ page, totalPages, maxButtons = 3 }) {
 const Products = () => {
   const [page, setPage] = useState(0);
   const [size] = useState(15);
-  const [allProducts, setAllProducts] = useState([]);
+  const [rows, setRows] = useState([]);
+  const [totalElements, setTotalElements] = useState(null);
+  const [totalPages, setTotalPages] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -62,18 +64,54 @@ const Products = () => {
     scrollToProductsTop();
     (async () => {
       try {
-        const res = await listProducts({ signal: controller.signal });
+        const res = await listAdminProducts({
+          page,
+          size,
+          activeOnly: false,
+          signal: controller.signal,
+        });
         if (!res.ok) {
           throw new Error(`Request failed (${res.status})`);
         }
         const dto = await res.json();
-        const list = Array.isArray(dto) ? dto : [];
+        const content = Array.isArray(dto?.content) ? dto.content : [];
+        const mapped = content.map((p, idx) => {
+          const idRaw = p?.id ?? `${page}-${idx}`;
+          const raw = p?.isActive ?? p?.active ?? p?.is_active;
+          let active = null;
+          if (raw === true || raw === 'true' || raw === 1) active = true;
+          else if (raw === false || raw === 'false' || raw === 0) active = false;
+
+          return {
+            id: String(idRaw),
+            name: p?.name != null ? String(p.name) : '—',
+            category: toCategoryLabel(p),
+            status: toStatusLabel(p),
+            active,
+          };
+        });
+
         if (!alive) return;
-        setAllProducts(list);
-        setPage(0);
+        setRows(mapped);
+        setTotalElements(
+          typeof dto?.totalElements === 'number'
+            ? dto.totalElements
+            : dto?.totalElements != null
+              ? Number(dto.totalElements)
+              : null
+        );
+        setTotalPages(
+          typeof dto?.totalPages === 'number'
+            ? dto.totalPages
+            : dto?.totalPages != null
+              ? Number(dto.totalPages)
+              : null
+        );
       } catch (e) {
         if (!alive) return;
-        setAllProducts([]);
+        setRows([]);
+        setTotalElements(null);
+        setTotalPages(null);
         setError(e instanceof Error ? e.message : 'Unknown error');
       } finally {
         if (alive) setLoading(false);
@@ -83,58 +121,27 @@ const Products = () => {
       alive = false;
       controller.abort();
     };
-  }, []);
-
-  const totalElements = allProducts.length;
-  const totalPages = totalElements > 0 ? Math.ceil(totalElements / size) : 0;
+  }, [page, size]);
 
   useEffect(() => {
-    if (totalPages <= 0) return;
+    if (totalPages == null || totalPages <= 0) return;
     if (page > totalPages - 1) {
       setPage(totalPages - 1);
     }
   }, [totalPages, page]);
 
-  const effectivePage = useMemo(() => {
-    if (totalPages <= 0) return 0;
-    return Math.min(page, totalPages - 1);
-  }, [page, totalPages]);
-
-  const pageSlice = useMemo(() => {
-    const start = effectivePage * size;
-    return allProducts.slice(start, start + size);
-  }, [allProducts, effectivePage, size]);
-
-  const rows = useMemo(
-    () =>
-      pageSlice.map((p, idx) => {
-        const idRaw = p?.id ?? `${effectivePage}-${idx}`;
-        const raw = p?.isActive ?? p?.active;
-        let active = null;
-        if (raw === true || raw === 'true' || raw === 1) active = true;
-        else if (raw === false || raw === 'false' || raw === 0) active = false;
-
-        return {
-          id: String(idRaw),
-          name: p?.name != null ? String(p.name) : '—',
-          category: toCategoryLabel(p),
-          status: toStatusLabel(p),
-          active,
-        };
-      }),
-    [pageSlice, effectivePage]
-  );
-
   const formattedTotal = useMemo(() => formatInteger(totalElements), [totalElements]);
   const showingFrom =
-    totalElements === 0 ? 0 : effectivePage * size + (rows.length > 0 ? 1 : 0);
-  const showingTo = effectivePage * size + rows.length;
-  const canPrev = effectivePage > 0 && !loading;
-  const canNext = !loading && totalPages > 0 && effectivePage + 1 < totalPages;
-  const visiblePages = useMemo(() => {
-    if (totalPages <= 0) return [];
-    return getVisiblePages({ page: effectivePage, totalPages, maxButtons: 3 });
-  }, [effectivePage, totalPages]);
+    totalElements == null ? 0 : page * size + (rows.length > 0 ? 1 : 0);
+  const showingTo = totalElements == null ? rows.length : page * size + rows.length;
+  const canPrev = page > 0 && !loading;
+  const canNext =
+    !loading &&
+    (typeof totalPages === 'number' ? page + 1 < totalPages : rows.length === size);
+  const visiblePages = useMemo(
+    () => getVisiblePages({ page, totalPages, maxButtons: 3 }),
+    [page, totalPages]
+  );
 
   return (
     <div className="products-page">
@@ -177,7 +184,7 @@ const Products = () => {
             disabled={!canPrev}
             onClick={() => {
               scrollToProductsTop();
-              setPage(Math.max(0, effectivePage - 1));
+              setPage((p) => Math.max(0, p - 1));
             }}
           >
             &lt; Prev
@@ -187,11 +194,11 @@ const Products = () => {
               key={p}
               type="button"
               className={
-                p === effectivePage
+                p === page
                   ? 'products-pagination-page products-pagination-page--active'
                   : 'products-pagination-page'
               }
-              aria-current={p === effectivePage ? 'page' : undefined}
+              aria-current={p === page ? 'page' : undefined}
               disabled={loading}
               onClick={() => {
                 scrollToProductsTop();
@@ -206,7 +213,7 @@ const Products = () => {
             disabled={!canNext}
             onClick={() => {
               scrollToProductsTop();
-              setPage(Math.min(totalPages - 1, effectivePage + 1));
+              setPage((p) => p + 1);
             }}
           >
             Next &gt;

@@ -29,11 +29,29 @@ export async function listAdminReviews({
 }
 
 /**
- * Tüm aktif ürünleri listeler (backend: GET /api/products — sayfalama yok, dizi döner).
+ * Genel katalog: GET /api/products — yalnızca aktif ürünler, sayfalama yok, dizi döner.
  * @see https://github.com/project-favo/backend/blob/main/FRONTEND_API_DOCUMENTATION.md
  */
 export async function listProducts({ signal } = {}) {
   return apiFetch('/api/products', { method: 'GET', signal });
+}
+
+/**
+ * Admin: GET /api/admin/products?page=&size=&activeOnly=
+ * activeOnly=false (varsayılan) tüm ürünleri döndürür; true ise yalnızca aktifler.
+ */
+export async function listAdminProducts({
+  page = 0,
+  size = 20,
+  activeOnly = false,
+  signal,
+} = {}) {
+  const qs = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+    activeOnly: String(Boolean(activeOnly)),
+  });
+  return apiFetch(`/api/admin/products?${qs.toString()}`, { method: 'GET', signal });
 }
 
 /**

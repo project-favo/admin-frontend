@@ -20,7 +20,7 @@
 
 .moderation-main-title {
   margin: 0 0 40px;
-  text-align: center;
+  text-align: left;
   color: #910029;
   font-size: clamp(1.5rem, 3vw, 36px);
   font-family: 'Abril Fatface', serif;
@@ -51,6 +51,43 @@
 
 .moderation-toolbar-meta {
   cursor: default;
+}
+
+.moderation-toolbar-meta button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.moderation-toolbar-meta button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.moderation-loading {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 220px;
+  margin: 12px 0 6px;
+  color: #910029;
+  font-family: 'Abril Fatface', serif;
+  letter-spacing: 0.03em;
+}
+
+.moderation-loading img {
+  width: 120px;
+  height: 28px;
+}
+
+.moderation-loading-text {
+  font-size: 18px;
 }
 
 .moderation-footer {
@@ -105,4 +142,11 @@
   min-width: 2rem;
   padding: 10px;
   text-align: center;
+  text-decoration: none;
+}
+
+.moderation-pagination-page--active {
+  text-decoration: underline;
+  text-underline-offset: 6px;
+  text-decoration-thickness: 2px;
 }

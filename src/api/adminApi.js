@@ -28,3 +28,11 @@ export async function listAdminReviews({
   return apiFetch(`/api/admin/reviews?${qs.toString()}`, { method: 'GET', signal });
 }
 
+/**
+ * Tüm aktif ürünleri listeler (backend: GET /api/products — sayfalama yok, dizi döner).
+ * @see https://github.com/project-favo/backend/blob/main/FRONTEND_API_DOCUMENTATION.md
+ */
+export async function listProducts({ signal } = {}) {
+  return apiFetch('/api/products', { method: 'GET', signal });
+}
+

@@ -10,11 +10,12 @@ import { useEffect, useId, useState } from 'react';
  */
 
 /**
- * @param {{ users: UserTableRow[] }} props
+ * @param {{ users: UserTableRow[], onUserAction?: (userId: string, action: 'activate' | 'suspend') => Promise<void> }} props
  */
-const UserTable = ({ users }) => {
+const UserTable = ({ users, onUserAction }) => {
   const menuIdPrefix = useId();
   const [openRowId, setOpenRowId] = useState(null);
+  const [actingRowId, setActingRowId] = useState(null);
 
   function getStatusKind(status) {
     const s = String(status || '').toLowerCase();
@@ -42,6 +43,23 @@ const UserTable = ({ users }) => {
     return () => document.removeEventListener('mousedown', onPointerDown, true);
   }, [openRowId]);
 
+  /**
+   * @param {string} userId
+   * @param {'activate' | 'suspend'} action
+   */
+  async function runAction(userId, action) {
+    if (!onUserAction) return;
+    setActingRowId(userId);
+    try {
+      await onUserAction(userId, action);
+      setOpenRowId(null);
+    } catch {
+      /* hata mesajı üst sayfada */
+    } finally {
+      setActingRowId(null);
+    }
+  }
+
   return (
     <section className="users-table-wrap" aria-label="User list">
       <div className="users-table-scroll">
@@ -67,6 +85,7 @@ const UserTable = ({ users }) => {
               const kind = getStatusKind(status);
               const menuId = `${menuIdPrefix}-${id}`;
               const isOpen = openRowId === id;
+              const rowBusy = actingRowId === id;
               return (
                 <tr key={id}>
                 <td>👤</td>
@@ -88,9 +107,11 @@ const UserTable = ({ users }) => {
                       className="users-actions-trigger"
                       aria-haspopup="menu"
                       aria-controls={menuId}
+                      aria-busy={rowBusy}
                       onClick={(e) => {
                         // prevent native <details> toggle; we control it
                         e.preventDefault();
+                        if (rowBusy) return;
                         setOpenRowId((prev) => (prev === id ? null : id));
                       }}
                     >
@@ -98,17 +119,24 @@ const UserTable = ({ users }) => {
                     </summary>
                     <div id={menuId} className="users-actions-menu" role="menu">
                       {kind === 'active' && (
-                        <>
-                          <button type="button" className="users-actions-item" role="menuitem">
-                            Suspend
-                          </button>
-                          <button type="button" className="users-actions-item" role="menuitem">
-                            Ban
-                          </button>
-                        </>
+                        <button
+                          type="button"
+                          className="users-actions-item"
+                          role="menuitem"
+                          disabled={rowBusy || !onUserAction}
+                          onClick={() => runAction(id, 'suspend')}
+                        >
+                          Suspend
+                        </button>
                       )}
                       {kind === 'suspend' && (
-                        <button type="button" className="users-actions-item" role="menuitem">
+                        <button
+                          type="button"
+                          className="users-actions-item"
+                          role="menuitem"
+                          disabled={rowBusy || !onUserAction}
+                          onClick={() => runAction(id, 'activate')}
+                        >
                           Activate
                         </button>
                       )}

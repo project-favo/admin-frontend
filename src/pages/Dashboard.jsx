@@ -8,7 +8,7 @@ const DASHBOARD_METRICS_PLACEHOLDER = [
     label: 'Total Users',
     value: '',
     deltaPrimary: '+5.2',
-    deltaSecondary: '% this week',
+    //deltaSecondary: '% this week',
     labelMultiline: false,
   },
   {
@@ -167,7 +167,7 @@ const Dashboard = () => {
         return {
           ...m,
           value: formatted ?? m.value,
-          deltaPrimary: formatted == null ? m.deltaPrimary : '—',
+          //deltaPrimary: formatted == null ? m.deltaPrimary : '—',
           deltaSecondary: formatted == null ? m.deltaSecondary : '% this week',
         };
       }

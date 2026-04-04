@@ -14,6 +14,27 @@ export async function listAdminUsers({
   return apiFetch(`/api/admin/users?${qs.toString()}`, { method: 'GET', signal });
 }
 
+/**
+ * Admin: PATCH /api/admin/users/{id}/activate
+ * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/controller/AdminController.java
+ */
+export async function patchAdminUserActivate(id, { signal } = {}) {
+  return apiFetch(`/api/admin/users/${encodeURIComponent(String(id))}/activate`, {
+    method: 'PATCH',
+    signal,
+  });
+}
+
+/**
+ * Admin: PATCH /api/admin/users/{id}/deactivate (Suspend)
+ */
+export async function patchAdminUserDeactivate(id, { signal } = {}) {
+  return apiFetch(`/api/admin/users/${encodeURIComponent(String(id))}/deactivate`, {
+    method: 'PATCH',
+    signal,
+  });
+}
+
 export async function listAdminReviews({
   page = 0,
   size = 20,

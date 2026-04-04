@@ -9,9 +9,14 @@ import '../styles/ModerationTable.css';
  */
 
 /**
- * @param {{ items: ModerationTableRow[] }} props
+ * @param {{
+ *   items: ModerationTableRow[];
+ *   onApprove: (id: string) => void;
+ *   onReject: (id: string) => void;
+ *   actionBusyId: string | null;
+ * }} props
  */
-const ModerationTable = ({ items }) => {
+const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
   return (
     <section className="moderation-table-wrap" aria-label="Content moderation queue">
       <div className="moderation-table-scroll">
@@ -37,10 +42,22 @@ const ModerationTable = ({ items }) => {
                 <td>{flagReason}</td>
                 <td>{aiScore}</td>
                 <td className="moderation-table-actions-cell">
-                  <button type="button" className="moderation-action-btn" aria-label="Approve">
+                  <button
+                    type="button"
+                    className="moderation-action-btn"
+                    aria-label="Approve — publish review"
+                    disabled={actionBusyId != null}
+                    onClick={() => onApprove(id)}
+                  >
                     ✅
                   </button>
-                  <button type="button" className="moderation-action-btn" aria-label="Reject">
+                  <button
+                    type="button"
+                    className="moderation-action-btn"
+                    aria-label="Reject — hide review"
+                    disabled={actionBusyId != null}
+                    onClick={() => onReject(id)}
+                  >
                     ❌
                   </button>
                 </td>

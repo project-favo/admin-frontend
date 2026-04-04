@@ -36,3 +36,24 @@ export async function listProducts({ signal } = {}) {
   return apiFetch('/api/products', { method: 'GET', signal });
 }
 
+/**
+ * Admin: review’ı arayüzden kaldırır (soft delete).
+ * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/controller/AdminController.java
+ */
+export async function patchAdminReviewDeactivate(id, { signal } = {}) {
+  return apiFetch(`/api/admin/reviews/${encodeURIComponent(String(id))}/deactivate`, {
+    method: 'PATCH',
+    signal,
+  });
+}
+
+/**
+ * Admin: pasif review’ı tekrar yayına alır.
+ */
+export async function patchAdminReviewActivate(id, { signal } = {}) {
+  return apiFetch(`/api/admin/reviews/${encodeURIComponent(String(id))}/activate`, {
+    method: 'PATCH',
+    signal,
+  });
+}
+

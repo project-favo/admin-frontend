@@ -162,3 +162,46 @@
 .settings-btn--secondary {
   margin-top: 0;
 }
+
+.settings-loading {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  min-height: 140px;
+  margin: 8px 0;
+  color: #910029;
+  font-family: 'Abril Fatface', serif;
+  letter-spacing: 0.03em;
+}
+
+.settings-loading img {
+  width: 120px;
+  height: 28px;
+}
+
+.settings-loading-text {
+  font-size: clamp(1rem, 1.8vw, 20px);
+}
+
+.settings-hint {
+  margin: 0;
+  color: #5a5a5a;
+  font-size: clamp(0.85rem, 1.4vw, 16px);
+  font-family: system-ui, sans-serif;
+  line-height: 1.35;
+}
+
+.settings-inline-msg {
+  margin: 0;
+  font-size: clamp(0.9rem, 1.5vw, 18px);
+  font-family: system-ui, sans-serif;
+  line-height: 1.35;
+}
+
+.settings-inline-msg--ok {
+  color: #1b5e20;
+}
+
+.settings-inline-msg--error {
+  color: #b71c1c;
+}

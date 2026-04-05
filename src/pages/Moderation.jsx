@@ -3,6 +3,7 @@ import ModerationTable from '../components/ModerationTable';
 import { useEffect, useMemo, useState } from 'react';
 import {
   listAdminReviews,
+  messageFromFailedResponse,
   patchAdminReviewActivate,
   patchAdminReviewDeactivate,
 } from '../api/adminApi';
@@ -90,12 +91,16 @@ function getVisiblePages({ page, totalPages, maxButtons = 3 }) {
 
 function mapAdminPageDtoToRows(dto, pageNum) {
   const content = Array.isArray(dto?.content) ? dto.content : [];
-  return content.map((r, idx) => ({
-    id: String(r?.id ?? `${pageNum}-${idx}`),
-    contentPreview: toContentPreview(r),
-    flagReason: toModerationStatusLabel(r?.moderationStatus),
-    aiScore: toAiScoreLabel(r?.toxicityScore),
-  }));
+  return content.map((r, idx) => {
+    const rawId = r?.id ?? r?.reviewId;
+    return {
+      id: rawId != null ? String(rawId) : `${pageNum}-${idx}`,
+      hasNumericId: rawId != null && String(rawId).trim() !== '' && Number.isFinite(Number(rawId)),
+      contentPreview: toContentPreview(r),
+      flagReason: toModerationStatusLabel(r?.moderationStatus),
+      aiScore: toAiScoreLabel(r?.toxicityScore),
+    };
+  });
 }
 
 function readPageMeta(dto) {
@@ -125,12 +130,14 @@ const Moderation = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionBusyId, setActionBusyId] = useState(null);
+  const [actionFeedback, setActionFeedback] = useState(null);
 
   useEffect(() => {
     let alive = true;
     const controller = new AbortController();
     setLoading(true);
     setError(null);
+    setActionFeedback(null);
     scrollToModerationTop();
     (async () => {
       try {
@@ -155,7 +162,9 @@ const Moderation = () => {
         setRows([]);
         setTotalElements(null);
         setTotalPages(null);
-        setError(e instanceof Error ? e.message : 'Unknown error');
+        setError(
+          e instanceof Error ? `Failed to load reviews: ${e.message}` : 'Failed to load reviews.'
+        );
       } finally {
         if (alive) setLoading(false);
       }
@@ -178,46 +187,58 @@ const Moderation = () => {
   );
 
   const handleApprove = async (id) => {
+    if (actionBusyId != null) return;
+    setActionFeedback(null);
     setActionBusyId(id);
     try {
       const res = await patchAdminReviewActivate(id);
       if (!res.ok) {
-        throw new Error(`Request failed (${res.status})`);
+        const msg = await messageFromFailedResponse(res);
+        throw new Error(msg);
       }
       const refresh = await listAdminReviews({ page, size, activeOnly });
-      if (refresh.ok) {
-        const dto = await refresh.json();
-        setRows(mapAdminPageDtoToRows(dto, page));
-        const meta = readPageMeta(dto);
-        setTotalElements(meta.totalElements);
-        setTotalPages(meta.totalPages);
-        setError(null);
+      if (!refresh.ok) {
+        const msg = await messageFromFailedResponse(refresh);
+        throw new Error(msg);
       }
+      const dto = await refresh.json();
+      setRows(mapAdminPageDtoToRows(dto, page));
+      const meta = readPageMeta(dto);
+      setTotalElements(meta.totalElements);
+      setTotalPages(meta.totalPages);
+      setActionFeedback({ ok: true, message: 'Review approved (published).' });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      setActionFeedback({ ok: false, message });
     } finally {
       setActionBusyId(null);
     }
   };
 
   const handleReject = async (id) => {
+    if (actionBusyId != null) return;
+    setActionFeedback(null);
     setActionBusyId(id);
     try {
       const res = await patchAdminReviewDeactivate(id);
       if (!res.ok) {
-        throw new Error(`Request failed (${res.status})`);
+        const msg = await messageFromFailedResponse(res);
+        throw new Error(msg);
       }
       const refresh = await listAdminReviews({ page, size, activeOnly });
-      if (refresh.ok) {
-        const dto = await refresh.json();
-        setRows(mapAdminPageDtoToRows(dto, page));
-        const meta = readPageMeta(dto);
-        setTotalElements(meta.totalElements);
-        setTotalPages(meta.totalPages);
-        setError(null);
+      if (!refresh.ok) {
+        const msg = await messageFromFailedResponse(refresh);
+        throw new Error(msg);
       }
+      const dto = await refresh.json();
+      setRows(mapAdminPageDtoToRows(dto, page));
+      const meta = readPageMeta(dto);
+      setTotalElements(meta.totalElements);
+      setTotalPages(meta.totalPages);
+      setActionFeedback({ ok: true, message: 'Review rejected (hidden).' });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      setActionFeedback({ ok: false, message });
     } finally {
       setActionBusyId(null);
     }
@@ -253,7 +274,19 @@ const Moderation = () => {
 
       {error && (
         <div role="alert" style={{ margin: '12px 0' }}>
-          Failed to load reviews: {error}
+          {error}
+        </div>
+      )}
+
+      {actionFeedback && (
+        <div
+          role="status"
+          style={{
+            margin: '8px 0 12px',
+            color: actionFeedback.ok ? '#0d5d2a' : '#910029',
+          }}
+        >
+          {actionFeedback.message}
         </div>
       )}
 

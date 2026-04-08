@@ -22,7 +22,7 @@ const DASHBOARD_METRICS_PLACEHOLDER = [
   {
     id: 'sponsored-ratio',
     label: 'Sponsored Content Ratio',
-    value: '18' + '% total',
+    value: '',
     deltaPrimary: null,
     deltaSecondary: null,
     labelMultiline: true,
@@ -58,12 +58,25 @@ function formatInteger(value) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
 }
 
+/** Backend: isCollaborative; ileride isSponsored eklenirse öncelikli kullanılır */
+function isReviewSponsoredLike(r) {
+  if (!r || typeof r !== 'object') return false;
+  const v =
+    r.isSponsored ??
+    r.sponsored ??
+    r.is_sponsored ??
+    r.isCollaborative ??
+    r.is_collaborative;
+  return v === true || v === 'true' || v === 1;
+}
+
 const Dashboard = () => {
   const [totalUsers, setTotalUsers] = useState(null);
   const [totalUsersLoading, setTotalUsersLoading] = useState(true);
   const [dailyReviewsToday, setDailyReviewsToday] = useState(null);
   const [dailyReviewsDeltaPct, setDailyReviewsDeltaPct] = useState(null);
   const [dailyReviewsLoading, setDailyReviewsLoading] = useState(true);
+  const [sponsoredRatioPct, setSponsoredRatioPct] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -108,6 +121,9 @@ const Dashboard = () => {
         let totalPages = 1;
         let todayCount = 0;
         let yesterdayCount = 0;
+        let sponsoredCount = 0;
+        let totalReviewsHint = null;
+        let scannedReviews = 0;
         const maxPages = 25;
 
         while (page < totalPages && page < maxPages) {
@@ -121,8 +137,14 @@ const Dashboard = () => {
           const dto = await res.json();
           totalPages = Number(dto?.totalPages ?? totalPages);
           const content = Array.isArray(dto?.content) ? dto.content : [];
+          if (page === 0 && dto?.totalElements != null) {
+            const te = Number(dto.totalElements);
+            if (Number.isFinite(te)) totalReviewsHint = te;
+          }
+          scannedReviews += content.length;
 
           for (const r of content) {
+            if (isReviewSponsoredLike(r)) sponsoredCount += 1;
             const raw = r?.createdAt ?? r?.created_at ?? r?.createdDate ?? r?.created_date;
             if (!raw) continue;
             const d = raw instanceof Date ? raw : new Date(raw);
@@ -139,6 +161,16 @@ const Dashboard = () => {
           setDailyReviewsDeltaPct(null);
         } else {
           setDailyReviewsDeltaPct(((todayCount - yesterdayCount) / yesterdayCount) * 100);
+        }
+
+        const totalForRatio =
+          typeof totalReviewsHint === 'number' && totalReviewsHint >= 0
+            ? totalReviewsHint
+            : scannedReviews;
+        if (totalForRatio > 0) {
+          setSponsoredRatioPct((sponsoredCount / totalForRatio) * 100);
+        } else {
+          setSponsoredRatioPct(0);
         }
       } catch {
         // ignore (keep placeholder)
@@ -193,12 +225,33 @@ const Dashboard = () => {
           deltaSecondary: formatted == null ? m.deltaSecondary : 'vs yesterday',
         };
       }
+      if (m.id === 'sponsored-ratio') {
+        if (dailyReviewsLoading && sponsoredRatioPct == null) {
+          return {
+            ...m,
+            value: 'Loading…',
+            deltaPrimary: '—',
+            deltaSecondary: '',
+          };
+        }
+        const pct =
+          typeof sponsoredRatioPct === 'number' && Number.isFinite(sponsoredRatioPct)
+            ? sponsoredRatioPct
+            : 0;
+        return {
+          ...m,
+          value: `${pct.toFixed(1)}% total`,
+          deltaPrimary: m.deltaPrimary,
+          deltaSecondary: m.deltaSecondary,
+        };
+      }
       return m;
     });
   }, [
     dailyReviewsDeltaPct,
     dailyReviewsLoading,
     dailyReviewsToday,
+    sponsoredRatioPct,
     totalUsers,
     totalUsersLoading,
   ]);

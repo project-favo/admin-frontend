@@ -7,6 +7,7 @@ import '../styles/ModerationTable.css';
  * @property {string} contentPreview
  * @property {string} flagReason
  * @property {string} aiScore
+ * @property {string} [aiScoreTitle] — ham skor / durum için tooltip
  */
 
 /**
@@ -37,37 +38,46 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
             </tr>
           </thead>
           <tbody>
-            {items.map(({ id, hasNumericId = true, contentPreview, flagReason, aiScore }) => {
-              const rowBusy = actionBusyId === id;
-              const actionsDisabled = rowBusy || !hasNumericId;
-              return (
-                <tr key={id}>
-                  <td>{contentPreview}</td>
-                  <td>{flagReason}</td>
-                  <td>{aiScore}</td>
-                  <td className="moderation-table-actions-cell">
-                    <button
-                      type="button"
-                      className="moderation-action-btn"
-                      aria-label="Approve — publish review"
-                      disabled={actionsDisabled}
-                      onClick={() => onApprove(id)}
-                    >
-                      ✅
-                    </button>
-                    <button
-                      type="button"
-                      className="moderation-action-btn"
-                      aria-label="Reject — hide review"
-                      disabled={actionsDisabled}
-                      onClick={() => onReject(id)}
-                    >
-                      ❌
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
+            {items.map(
+              ({
+                id,
+                hasNumericId = true,
+                contentPreview,
+                flagReason,
+                aiScore,
+                aiScoreTitle,
+              }) => {
+                const rowBusy = actionBusyId === id;
+                const actionsDisabled = rowBusy || !hasNumericId;
+                return (
+                  <tr key={id}>
+                    <td>{contentPreview}</td>
+                    <td>{flagReason}</td>
+                    <td title={aiScoreTitle}>{aiScore}</td>
+                    <td className="moderation-table-actions-cell">
+                      <button
+                        type="button"
+                        className="moderation-action-btn"
+                        aria-label="Approve — publish review"
+                        disabled={actionsDisabled}
+                        onClick={() => onApprove(id)}
+                      >
+                        ✅
+                      </button>
+                      <button
+                        type="button"
+                        className="moderation-action-btn"
+                        aria-label="Reject — hide review"
+                        disabled={actionsDisabled}
+                        onClick={() => onReject(id)}
+                      >
+                        ❌
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }
+            )}
           </tbody>
         </table>
       </div>

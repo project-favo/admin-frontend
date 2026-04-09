@@ -1,55 +1,18 @@
 import '../styles/Dashboard.css';
-import { useEffect, useMemo, useState } from 'react';
-import { listAdminReviews, listAdminUsers } from '../api/adminApi';
+import { useEffect, useRef, useState } from 'react';
+import { listAdminProducts, listAdminReviews, listAdminUsers } from '../api/adminApi';
 
-const DASHBOARD_METRICS_PLACEHOLDER = [
-  {
-    id: 'total-users',
-    label: 'Total Users',
-    value: '',
-    deltaPrimary: '+5.2',
-    //deltaSecondary: '% this week',
-    labelMultiline: false,
-  },
-  {
-    id: 'daily-reviews',
-    label: 'Daily Reviews',
-    value: '',
-    deltaPrimary: '+12',
-    deltaSecondary: 'vs yesterday',
-    labelMultiline: false,
-  },
-  {
-    id: 'sponsored-ratio',
-    label: 'Sponsored Content Ratio',
-    value: '',
-    deltaPrimary: null,
-    deltaSecondary: null,
-    labelMultiline: true,
-  },
-];
+const DASHBOARD_POLL_MS = 5000;
 
-/** Şimdilik mock; backend gelince GET /admin/flagged-content vb. ile doldurulacak */
-const MOCK_FLAGGED_CONTENT = [
-  {
-    id: 'fc-1',
-    userHandle: '@johndoe',
-    contentSnippet: '"Best product ever!!"',
-    aiScoreLabel: '98% Spam',
-  },
-  {
-    id: 'fc-2',
-    userHandle: '@mark_t',
-    contentSnippet: 'Suspicious Image.jpg',
-    aiScoreLabel: '85% NSFW',
-  },
-  {
-    id: 'fc-3',
-    userHandle: '@sara12',
-    contentSnippet: '"Click here to buy..."',
-    aiScoreLabel: '92% Scam',
-  },
-];
+function MiniStatLoading() {
+  return (
+    <span className="dashboard-bounce-dots" aria-hidden="true">
+      <span className="dashboard-bounce-dots-dot" />
+      <span className="dashboard-bounce-dots-dot" />
+      <span className="dashboard-bounce-dots-dot" />
+    </span>
+  );
+}
 
 function formatInteger(value) {
   if (value == null) return null;
@@ -71,56 +34,114 @@ function isReviewSponsoredLike(r) {
 }
 
 const Dashboard = () => {
-  const [totalUsers, setTotalUsers] = useState(null);
-  const [totalUsersLoading, setTotalUsersLoading] = useState(true);
+  const [userCountTotal, setUserCountTotal] = useState(null);
+  const [userCountActive, setUserCountActive] = useState(null);
+  const [usersMiniLoading, setUsersMiniLoading] = useState(true);
+  const [productCountTotal, setProductCountTotal] = useState(null);
+  const [productCountActive, setProductCountActive] = useState(null);
+  const [productsMiniLoading, setProductsMiniLoading] = useState(true);
+  const [reviewCountTotal, setReviewCountTotal] = useState(null);
   const [dailyReviewsToday, setDailyReviewsToday] = useState(null);
-  const [dailyReviewsDeltaPct, setDailyReviewsDeltaPct] = useState(null);
-  const [dailyReviewsLoading, setDailyReviewsLoading] = useState(true);
   const [sponsoredRatioPct, setSponsoredRatioPct] = useState(null);
+  const [reviewsMiniLoading, setReviewsMiniLoading] = useState(true);
+
+  const usersLoadingSettled = useRef(false);
+  const productsLoadingSettled = useRef(false);
+  const reviewsLoadingSettled = useRef(false);
+  const pollInFlight = useRef(false);
 
   useEffect(() => {
     let alive = true;
-    const controller = new AbortController();
-    (async () => {
+    let currentPollAbort = null;
+
+    async function fetchUsers(signal) {
       try {
-        const res = await listAdminUsers({
-          page: 0,
-          size: 1,
-          activeOnly: true,
-          signal: controller.signal,
-        });
-        if (!res.ok) return;
-        const dto = await res.json();
-        const total = dto?.totalElements;
-        if (alive) setTotalUsers(typeof total === 'number' ? total : Number(total));
+        const [resAll, resActive] = await Promise.all([
+          listAdminUsers({
+            page: 0,
+            size: 1,
+            activeOnly: false,
+            signal,
+          }),
+          listAdminUsers({
+            page: 0,
+            size: 1,
+            activeOnly: true,
+            signal,
+          }),
+        ]);
+        if (!alive) return;
+        if (resAll.ok) {
+          const dto = await resAll.json();
+          const t = dto?.totalElements;
+          const n = typeof t === 'number' ? t : Number(t);
+          if (alive) setUserCountTotal(Number.isFinite(n) ? n : null);
+        }
+        if (resActive.ok) {
+          const dto = await resActive.json();
+          const t = dto?.totalElements;
+          const n = typeof t === 'number' ? t : Number(t);
+          if (alive) setUserCountActive(Number.isFinite(n) ? n : null);
+        }
       } catch {
-        // ignore (keep placeholder)
+        // ignore
       } finally {
-        if (alive) setTotalUsersLoading(false);
+        if (alive && !usersLoadingSettled.current) {
+          usersLoadingSettled.current = true;
+          setUsersMiniLoading(false);
+        }
       }
-    })();
-    return () => {
-      alive = false;
-      controller.abort();
-    };
-  }, []);
+    }
 
-  useEffect(() => {
-    let alive = true;
-    const controller = new AbortController();
-    (async () => {
+    async function fetchProducts(signal) {
+      try {
+        const [resAll, resActive] = await Promise.all([
+          listAdminProducts({
+            page: 0,
+            size: 1,
+            activeOnly: false,
+            signal,
+          }),
+          listAdminProducts({
+            page: 0,
+            size: 1,
+            activeOnly: true,
+            signal,
+          }),
+        ]);
+        if (!alive) return;
+        if (resAll.ok) {
+          const dto = await resAll.json();
+          const t = dto?.totalElements;
+          const n = typeof t === 'number' ? t : Number(t);
+          if (alive) setProductCountTotal(Number.isFinite(n) ? n : null);
+        }
+        if (resActive.ok) {
+          const dto = await resActive.json();
+          const t = dto?.totalElements;
+          const n = typeof t === 'number' ? t : Number(t);
+          if (alive) setProductCountActive(Number.isFinite(n) ? n : null);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (alive && !productsLoadingSettled.current) {
+          productsLoadingSettled.current = true;
+          setProductsMiniLoading(false);
+        }
+      }
+    }
+
+    async function fetchReviews(signal) {
       try {
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const yesterdayStart = new Date(todayStart);
-        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
         const tomorrowStart = new Date(todayStart);
         tomorrowStart.setDate(tomorrowStart.getDate() + 1);
 
         let page = 0;
         let totalPages = 1;
         let todayCount = 0;
-        let yesterdayCount = 0;
         let sponsoredCount = 0;
         let totalReviewsHint = null;
         let scannedReviews = 0;
@@ -131,9 +152,9 @@ const Dashboard = () => {
             page,
             size: 100,
             activeOnly: true,
-            signal: controller.signal,
+            signal,
           });
-          if (!res.ok) return;
+          if (!res.ok) break;
           const dto = await res.json();
           totalPages = Number(dto?.totalPages ?? totalPages);
           const content = Array.isArray(dto?.content) ? dto.content : [];
@@ -150,180 +171,203 @@ const Dashboard = () => {
             const d = raw instanceof Date ? raw : new Date(raw);
             if (Number.isNaN(d.getTime())) continue;
             if (d >= todayStart && d < tomorrowStart) todayCount += 1;
-            else if (d >= yesterdayStart && d < todayStart) yesterdayCount += 1;
           }
           page += 1;
         }
 
         if (!alive) return;
         setDailyReviewsToday(todayCount);
-        if (yesterdayCount <= 0) {
-          setDailyReviewsDeltaPct(null);
-        } else {
-          setDailyReviewsDeltaPct(((todayCount - yesterdayCount) / yesterdayCount) * 100);
-        }
 
         const totalForRatio =
           typeof totalReviewsHint === 'number' && totalReviewsHint >= 0
             ? totalReviewsHint
             : scannedReviews;
+        if (alive) {
+          setReviewCountTotal(
+            typeof totalForRatio === 'number' && totalForRatio >= 0 ? totalForRatio : null
+          );
+        }
         if (totalForRatio > 0) {
           setSponsoredRatioPct((sponsoredCount / totalForRatio) * 100);
         } else {
           setSponsoredRatioPct(0);
         }
       } catch {
-        // ignore (keep placeholder)
+        // ignore
       } finally {
-        if (alive) setDailyReviewsLoading(false);
+        if (alive && !reviewsLoadingSettled.current) {
+          reviewsLoadingSettled.current = true;
+          setReviewsMiniLoading(false);
+        }
       }
-    })();
+    }
+
+    async function poll() {
+      if (!alive || pollInFlight.current) return;
+      pollInFlight.current = true;
+      currentPollAbort?.abort();
+      const controller = new AbortController();
+      currentPollAbort = controller;
+      const { signal } = controller;
+      try {
+        await Promise.all([fetchUsers(signal), fetchProducts(signal), fetchReviews(signal)]);
+      } catch {
+        // aborted veya ağ hatası — state güncellemesi fetch içinde korunuyor
+      } finally {
+        pollInFlight.current = false;
+        if (currentPollAbort === controller) currentPollAbort = null;
+      }
+    }
+
+    poll();
+    const intervalId = window.setInterval(poll, DASHBOARD_POLL_MS);
+
     return () => {
       alive = false;
-      controller.abort();
+      currentPollAbort?.abort();
+      window.clearInterval(intervalId);
     };
   }, []);
 
-  const metrics = useMemo(() => {
-    return DASHBOARD_METRICS_PLACEHOLDER.map((m) => {
-      if (m.id === 'total-users') {
-        const formatted = formatInteger(totalUsers);
-        if (totalUsersLoading && formatted == null) {
-          return {
-            ...m,
-            value: 'Loading…',
-            deltaPrimary: '—',
-            deltaSecondary: '',
-          };
-        }
-        return {
-          ...m,
-          value: formatted ?? m.value,
-          //deltaPrimary: formatted == null ? m.deltaPrimary : '—',
-          deltaSecondary: formatted == null ? m.deltaSecondary : '% this week',
-        };
-      }
-      if (m.id === 'daily-reviews') {
-        const formatted = formatInteger(dailyReviewsToday);
-        if (dailyReviewsLoading && formatted == null) {
-          return {
-            ...m,
-            value: 'Loading…',
-            deltaPrimary: '—',
-            deltaSecondary: '',
-          };
-        }
-        const pct = dailyReviewsDeltaPct;
-        const pctLabel =
-          typeof pct === 'number' && Number.isFinite(pct)
-            ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
-            : '—';
-        return {
-          ...m,
-          value: formatted ?? m.value,
-          deltaPrimary: formatted == null ? m.deltaPrimary : pctLabel,
-          deltaSecondary: formatted == null ? m.deltaSecondary : 'vs yesterday',
-        };
-      }
-      if (m.id === 'sponsored-ratio') {
-        if (dailyReviewsLoading && sponsoredRatioPct == null) {
-          return {
-            ...m,
-            value: 'Loading…',
-            deltaPrimary: '—',
-            deltaSecondary: '',
-          };
-        }
-        const pct =
-          typeof sponsoredRatioPct === 'number' && Number.isFinite(sponsoredRatioPct)
-            ? sponsoredRatioPct
-            : 0;
-        return {
-          ...m,
-          value: `${pct.toFixed(1)}% total`,
-          deltaPrimary: m.deltaPrimary,
-          deltaSecondary: m.deltaSecondary,
-        };
-      }
-      return m;
-    });
-  }, [
-    dailyReviewsDeltaPct,
-    dailyReviewsLoading,
-    dailyReviewsToday,
-    sponsoredRatioPct,
-    totalUsers,
-    totalUsersLoading,
-  ]);
+  const suspendedUsers =
+    userCountTotal != null && userCountActive != null
+      ? Math.max(0, userCountTotal - userCountActive)
+      : null;
+
+  const inactiveProducts =
+    productCountTotal != null && productCountActive != null
+      ? Math.max(0, productCountTotal - productCountActive)
+      : null;
 
   return (
     <div className="dashboard">
-      <h2 className="dashboard-main-title">Dashboard Overview</h2>
+      <div className="dashboard-inner">
+        <header className="dashboard-header">
+          <h2 className="dashboard-main-title">Dashboard Overview</h2>
+        </header>
 
-      <section className="dashboard-stats" aria-label="Key metrics">
-        {metrics.map(
-          ({ id, label, value, deltaPrimary, deltaSecondary, labelMultiline }) => (
-            <div key={id} className="dashboard-stat">
-              <div className="dashboard-stat-chart">
-                <div
-                  className={
-                    labelMultiline
-                      ? 'dashboard-stat-label dashboard-stat-label--multiline'
-                      : 'dashboard-stat-label'
-                  }
-                >
-                  {label}
-                </div>
-                {value != null && (
-                  <div className="dashboard-stat-value">{value}</div>
+        <nav className="dashboard-pillar-headings" aria-label="Dashboard areas">
+        <div className="dashboard-pillar-block dashboard-section">
+          <h3 className="dashboard-pillar-title">Users</h3>
+          <div
+            className="dashboard-user-mini-stats"
+            role="group"
+            aria-label="User counts"
+          >
+            <div className="dashboard-mini-stat">
+              <div className="dashboard-mini-stat-label">Total Users</div>
+              <div className="dashboard-mini-stat-value">
+                {usersMiniLoading && userCountTotal == null ? (
+                  <MiniStatLoading />
+                ) : (
+                  formatInteger(userCountTotal) ?? '—'
                 )}
-                <div
-                  className={
-                    value == null
-                      ? 'dashboard-stat-delta dashboard-stat-delta--trailing'
-                      : 'dashboard-stat-delta'
-                  }
-                >
-                  <span>{deltaPrimary}</span>
-                  <span>{deltaSecondary}</span>
-                </div>
               </div>
             </div>
-          )
-        )}
-      </section>
-
-      <h3 className="dashboard-section-title">Action Required: AI-Flagged Content</h3>
-
-      <section className="dashboard-flagged" aria-label="Flagged content">
-        <div className="dashboard-flagged-scroll">
-          <table className="dashboard-flagged-table">
-            <colgroup>
-              <col className="dashboard-flagged-col dashboard-flagged-col--user" />
-              <col className="dashboard-flagged-col dashboard-flagged-col--snippet" />
-              <col className="dashboard-flagged-col dashboard-flagged-col--score" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th scope="col">User</th>
-                <th scope="col">Content Snippet</th>
-                <th scope="col">AI Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MOCK_FLAGGED_CONTENT.map(
-                ({ id, userHandle, contentSnippet, aiScoreLabel }) => (
-                  <tr key={id}>
-                    <td>{userHandle}</td>
-                    <td className="dashboard-flagged-cell-snippet">{contentSnippet}</td>
-                    <td>{aiScoreLabel}</td>
-                  </tr>
-                )
-              )}
-            </tbody>
-          </table>
+            <div className="dashboard-mini-stat">
+              <div className="dashboard-mini-stat-label">Active Users</div>
+              <div className="dashboard-mini-stat-value">
+                {usersMiniLoading && userCountActive == null ? (
+                  <MiniStatLoading />
+                ) : (
+                  formatInteger(userCountActive) ?? '—'
+                )}
+              </div>
+            </div>
+            <div className="dashboard-mini-stat">
+              <div className="dashboard-mini-stat-label">Suspended Users</div>
+              <div className="dashboard-mini-stat-value">
+                {usersMiniLoading && suspendedUsers == null ? (
+                  <MiniStatLoading />
+                ) : (
+                  formatInteger(suspendedUsers) ?? '—'
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </section>
+        <div className="dashboard-pillar-block dashboard-section">
+          <h3 className="dashboard-pillar-title">Products</h3>
+          <div
+            className="dashboard-user-mini-stats"
+            role="group"
+            aria-label="Product counts"
+          >
+            <div className="dashboard-mini-stat">
+              <div className="dashboard-mini-stat-label">Total Products</div>
+              <div className="dashboard-mini-stat-value">
+                {productsMiniLoading && productCountTotal == null ? (
+                  <MiniStatLoading />
+                ) : (
+                  formatInteger(productCountTotal) ?? '—'
+                )}
+              </div>
+            </div>
+            <div className="dashboard-mini-stat">
+              <div className="dashboard-mini-stat-label">Active Products</div>
+              <div className="dashboard-mini-stat-value">
+                {productsMiniLoading && productCountActive == null ? (
+                  <MiniStatLoading />
+                ) : (
+                  formatInteger(productCountActive) ?? '—'
+                )}
+              </div>
+            </div>
+            <div className="dashboard-mini-stat">
+              <div className="dashboard-mini-stat-label">Inactive Products</div>
+              <div className="dashboard-mini-stat-value">
+                {productsMiniLoading && inactiveProducts == null ? (
+                  <MiniStatLoading />
+                ) : (
+                  formatInteger(inactiveProducts) ?? '—'
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="dashboard-pillar-block dashboard-section">
+          <h3 className="dashboard-pillar-title">Reviews</h3>
+          <div
+            className="dashboard-user-mini-stats"
+            role="group"
+            aria-label="Review metrics"
+          >
+            <div className="dashboard-mini-stat">
+              <div className="dashboard-mini-stat-label">Total Reviews</div>
+              <div className="dashboard-mini-stat-value">
+                {reviewsMiniLoading && reviewCountTotal == null ? (
+                  <MiniStatLoading />
+                ) : (
+                  formatInteger(reviewCountTotal) ?? '—'
+                )}
+              </div>
+            </div>
+            <div className="dashboard-mini-stat">
+              <div className="dashboard-mini-stat-label">Sponsored Content Ratio</div>
+              <div className="dashboard-mini-stat-value">
+                {reviewsMiniLoading && sponsoredRatioPct == null ? (
+                  <MiniStatLoading />
+                ) : typeof sponsoredRatioPct === 'number' && Number.isFinite(sponsoredRatioPct) ? (
+                  `${sponsoredRatioPct.toFixed(1)}%`
+                ) : (
+                  '—'
+                )}
+              </div>
+            </div>
+            <div className="dashboard-mini-stat">
+              <div className="dashboard-mini-stat-label">Today&apos;s Reviews</div>
+              <div className="dashboard-mini-stat-value">
+                {reviewsMiniLoading ? (
+                  <MiniStatLoading />
+                ) : (
+                  formatInteger(dailyReviewsToday) ?? '—'
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
+      </div>
     </div>
   );
 };

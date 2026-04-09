@@ -60,15 +60,114 @@ function toModerationStatusLabel(raw) {
   return map[s] || (raw ? String(raw) : '—');
 }
 
-function toAiScoreLabel(toxicityScore) {
-  if (toxicityScore == null) return '—';
-  const n = Number(toxicityScore);
-  if (!Number.isFinite(n)) return '—';
-  const pct = n <= 1 ? Math.round(n * 100) : Math.round(n);
-  let emoji = '🟡';
-  if (pct >= 85) emoji = '🔴';
-  else if (pct >= 60) emoji = '🟠';
-  return `${emoji} ${pct}%`;
+/**
+ * ReviewResponseDto / JSON: toxicityScore (Double 0–1). Bazı ortamlar snake_case dönebilir.
+ * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/Domain/review/ReviewResponseDto.java
+ */
+function extractToxicityScore(review) {
+  if (!review || typeof review !== 'object') return null;
+  const nested =
+    review.toxicity && typeof review.toxicity === 'object' ? review.toxicity.score : undefined;
+  const v =
+    review.toxicityScore ??
+    review.toxicity_score ??
+    review.toxicScore ??
+    nested;
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Backend HF analizi yalnızca description üzerinde; tahminde de ağırlık buna yakın. */
+function buildTextForLocalToxicityEstimate(review) {
+  const title = review?.title != null ? String(review.title).trim() : '';
+  const desc = review?.description != null ? String(review.description).trim() : '';
+  if (desc && title && desc !== title) return `${desc}\n${title}`;
+  return desc || title || '';
+}
+
+/**
+ * API skoru yokken (DB'de null — çoğunlukla HUGGINGFACE_API_TOKEN eksik veya eski kayıt) gösterilebilir bir 0–100 tahmin.
+ * Gerçek model skoru değildir; ToxicityService ile aynı değeri vermez.
+ */
+function estimateToxicityPercentFromText(text) {
+  const s = text != null ? String(text).trim() : '';
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  let hits = 0;
+  const wordPatterns = [
+    /\b(siktir|sikerim|orospu|piç|aptal|salak|gerizekalı|şerefsiz|kahpe|öldür|katil)\b/giu,
+    /\b(fuck|shit|bitch|asshole|crap|damn|hate|kill|idiot|stupid|moron|dumb)\b/giu,
+  ];
+  for (const p of wordPatterns) {
+    const m = lower.match(p);
+    if (m) hits += m.length;
+  }
+  const chaos =
+    (s.match(/[!]{3,}/g) || []).length + (s.match(/[A-Za-z]{20,}/g) || []).length;
+  hits += chaos;
+  const raw = Math.min(95, hits * 16 + (s.length > 800 ? 8 : 0));
+  return Math.round(raw);
+}
+
+/** 0–1 veya 0–100 değerini yüzde tamsayıya çevirir (HuggingFace "toxic" skoru 0–1). */
+function toxicityToPercent(raw) {
+  if (raw == null) return null;
+  if (raw >= 0 && raw <= 1) return Math.round(raw * 100);
+  if (raw > 1 && raw <= 100) return Math.round(raw);
+  return null;
+}
+
+/**
+ * Backend ToxicityService ile aynı bantlar: ≥0.80 kritik, ≥0.50 uyarı.
+ * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/Service/Moderation/ToxicityService.java
+ */
+function formatAiScoreFromReview(review) {
+  const raw = extractToxicityScore(review);
+  let pct = toxicityToPercent(raw);
+  let source = 'api';
+
+  if (pct == null) {
+    const text = buildTextForLocalToxicityEstimate(review);
+    const est = estimateToxicityPercentFromText(text);
+    if (est != null) {
+      pct = est;
+      source = 'estimate';
+    }
+  }
+
+  const status = String(review?.moderationStatus ?? '')
+    .trim()
+    .toUpperCase();
+
+  if (pct != null) {
+    let emoji = '🟢';
+    if (pct >= 80) emoji = '🔴';
+    else if (pct >= 50) emoji = '🟠';
+    const display = `${emoji} ${pct}%`;
+    const title =
+      source === 'api'
+        ? raw != null
+          ? `Backend toxicityScore: ${raw.toFixed(4)} → ${pct}%. Eşikler: ≥80% gizleme, ≥50% işaretleme.`
+          : undefined
+        : `API'de toxicityScore yok (kayıtta HF skoru yok). Yerel metin tahmini: ${pct}% — kalıcı skor için sunucuda HUGGINGFACE_API_TOKEN ve yeniden analiz gerekir.`;
+    return { display, title };
+  }
+
+  if (status === 'PENDING') {
+    return {
+      display: '⏳ Pending AI',
+      title: 'Skor henüz yok veya HuggingFace analizi bekleniyor.',
+    };
+  }
+  if (status === 'AUTO_FLAGGED') {
+    return {
+      display: '⚠️ —',
+      title: 'İşaretli; toxicity skoru yanıtta yok (veri tutarsızlığı olabilir).',
+    };
+  }
+
+  return { display: '—', title: undefined };
 }
 
 function scrollToModerationTop() {
@@ -93,12 +192,14 @@ function mapAdminPageDtoToRows(dto, pageNum) {
   const content = Array.isArray(dto?.content) ? dto.content : [];
   return content.map((r, idx) => {
     const rawId = r?.id ?? r?.reviewId;
+    const { display, title } = formatAiScoreFromReview(r);
     return {
       id: rawId != null ? String(rawId) : `${pageNum}-${idx}`,
       hasNumericId: rawId != null && String(rawId).trim() !== '' && Number.isFinite(Number(rawId)),
       contentPreview: toContentPreview(r),
       flagReason: toModerationStatusLabel(r?.moderationStatus),
-      aiScore: toAiScoreLabel(r?.toxicityScore),
+      aiScore: display,
+      aiScoreTitle: title,
     };
   });
 }

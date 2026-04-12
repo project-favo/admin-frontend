@@ -1,17 +1,59 @@
 import { apiFetch } from './http';
 
+/**
+ * GET /api/admin/users?page=&size=&activeOnly=&inactiveOnly=
+ * - inactiveOnly=true → yalnızca askıya alınmış (isActive=false) kullanıcılar; backend’de AdminService + repository desteği gerekir.
+ */
 export async function listAdminUsers({
   page = 0,
   size = 20,
   activeOnly = false,
+  inactiveOnly = false,
   signal,
 } = {}) {
   const qs = new URLSearchParams({
     page: String(page),
     size: String(size),
     activeOnly: String(Boolean(activeOnly)),
+    inactiveOnly: String(Boolean(inactiveOnly)),
   });
   return apiFetch(`/api/admin/users?${qs.toString()}`, { method: 'GET', signal });
+}
+
+/**
+ * Mevcut filtreyle tüm sayfaları sırayla çeker (export vb. için).
+ * @param {{ activeOnly?: boolean, inactiveOnly?: boolean, pageSize?: number, signal?: AbortSignal }} opts
+ */
+export async function fetchAllAdminUsers({
+  activeOnly = false,
+  inactiveOnly = false,
+  pageSize = 200,
+  signal,
+} = {}) {
+  const all = [];
+  let page = 0;
+  for (;;) {
+    const res = await listAdminUsers({
+      page,
+      size: pageSize,
+      activeOnly,
+      inactiveOnly,
+      signal,
+    });
+    if (!res.ok) {
+      const msg = await messageFromFailedResponse(res);
+      throw new Error(msg);
+    }
+    const dto = await res.json();
+    const content = Array.isArray(dto?.content) ? dto.content : [];
+    all.push(...content);
+    const tp = dto?.totalPages ?? dto?.total_pages ?? dto?.page?.totalPages;
+    if (content.length === 0) break;
+    if (typeof tp === 'number' && Number.isFinite(tp) && page + 1 >= tp) break;
+    if (content.length < pageSize) break;
+    page += 1;
+  }
+  return all;
 }
 
 /**
@@ -50,6 +92,40 @@ export async function listAdminReviews({
 }
 
 /**
+ * Mevcut filtreyle tüm sayfaları sırayla çeker (export vb. için).
+ * @param {{ activeOnly?: boolean, pageSize?: number, signal?: AbortSignal }} opts
+ */
+export async function fetchAllAdminReviews({
+  activeOnly = false,
+  pageSize = 200,
+  signal,
+} = {}) {
+  const all = [];
+  let page = 0;
+  for (;;) {
+    const res = await listAdminReviews({
+      page,
+      size: pageSize,
+      activeOnly,
+      signal,
+    });
+    if (!res.ok) {
+      const msg = await messageFromFailedResponse(res);
+      throw new Error(msg);
+    }
+    const dto = await res.json();
+    const content = Array.isArray(dto?.content) ? dto.content : [];
+    all.push(...content);
+    const tp = dto?.totalPages ?? dto?.total_pages ?? dto?.page?.totalPages;
+    if (content.length === 0) break;
+    if (typeof tp === 'number' && Number.isFinite(tp) && page + 1 >= tp) break;
+    if (content.length < pageSize) break;
+    page += 1;
+  }
+  return all;
+}
+
+/**
  * Genel katalog: GET /api/products — yalnızca aktif ürünler, sayfalama yok, dizi döner.
  * @see https://github.com/project-favo/backend/blob/main/FRONTEND_API_DOCUMENTATION.md
  */
@@ -73,6 +149,40 @@ export async function listAdminProducts({
     activeOnly: String(Boolean(activeOnly)),
   });
   return apiFetch(`/api/admin/products?${qs.toString()}`, { method: 'GET', signal });
+}
+
+/**
+ * Mevcut filtreyle tüm sayfaları sırayla çeker (export vb. için).
+ * @param {{ activeOnly?: boolean, pageSize?: number, signal?: AbortSignal }} opts
+ */
+export async function fetchAllAdminProducts({
+  activeOnly = false,
+  pageSize = 200,
+  signal,
+} = {}) {
+  const all = [];
+  let page = 0;
+  for (;;) {
+    const res = await listAdminProducts({
+      page,
+      size: pageSize,
+      activeOnly,
+      signal,
+    });
+    if (!res.ok) {
+      const msg = await messageFromFailedResponse(res);
+      throw new Error(msg);
+    }
+    const dto = await res.json();
+    const content = Array.isArray(dto?.content) ? dto.content : [];
+    all.push(...content);
+    const tp = dto?.totalPages ?? dto?.total_pages ?? dto?.page?.totalPages;
+    if (content.length === 0) break;
+    if (typeof tp === 'number' && Number.isFinite(tp) && page + 1 >= tp) break;
+    if (content.length < pageSize) break;
+    page += 1;
+  }
+  return all;
 }
 
 /**

@@ -5,8 +5,11 @@ import '../styles/ModerationTable.css';
  * @property {string} id
  * @property {boolean} [hasNumericId]
  * @property {string} contentPreview
- * @property {string} flagReason
+ * @property {string} productLabel
+ * @property {string} collaborativeLabel
+ * @property {string} likeCountDisplay
  * @property {string} aiScore
+ * @property {'low'|'mid'|'high'|null} [aiScoreTone] — yüzde skor için renk bandı
  * @property {string} [aiScoreTitle] — ham skor / durum için tooltip
  */
 
@@ -25,14 +28,18 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
         <table className="moderation-table">
           <colgroup>
             <col className="moderation-table-col-preview" />
-            <col className="moderation-table-col-reason" />
+            <col className="moderation-table-col-product" />
+            <col className="moderation-table-col-collab" />
+            <col className="moderation-table-col-likes" />
             <col className="moderation-table-col-score" />
             <col className="moderation-table-col-actions" />
           </colgroup>
           <thead>
             <tr>
               <th scope="col">Content Preview</th>
-              <th scope="col">Flag Reason</th>
+              <th scope="col">Product</th>
+              <th scope="col">Collaborative</th>
+              <th scope="col">Likes</th>
               <th scope="col">AI Score</th>
               <th scope="col">Actions</th>
             </tr>
@@ -43,36 +50,49 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
                 id,
                 hasNumericId = true,
                 contentPreview,
-                flagReason,
+                productLabel,
+                collaborativeLabel,
+                likeCountDisplay,
                 aiScore,
+                aiScoreTone,
                 aiScoreTitle,
               }) => {
                 const rowBusy = actionBusyId === id;
                 const actionsDisabled = rowBusy || !hasNumericId;
+                const scoreClass =
+                  aiScoreTone === 'low' || aiScoreTone === 'mid' || aiScoreTone === 'high'
+                    ? `moderation-cell-score moderation-cell-score--${aiScoreTone}`
+                    : 'moderation-cell-score';
                 return (
                   <tr key={id}>
-                    <td>{contentPreview}</td>
-                    <td>{flagReason}</td>
-                    <td title={aiScoreTitle}>{aiScore}</td>
+                    <td className="moderation-cell-preview">{contentPreview}</td>
+                    <td className="moderation-cell-product">{productLabel}</td>
+                    <td className="moderation-cell-collab">{collaborativeLabel}</td>
+                    <td className="moderation-cell-likes">{likeCountDisplay}</td>
+                    <td className={scoreClass} title={aiScoreTitle}>
+                      {aiScore}
+                    </td>
                     <td className="moderation-table-actions-cell">
-                      <button
-                        type="button"
-                        className="moderation-action-btn"
-                        aria-label="Approve — publish review"
-                        disabled={actionsDisabled}
-                        onClick={() => onApprove(id)}
-                      >
-                        ✅
-                      </button>
-                      <button
-                        type="button"
-                        className="moderation-action-btn"
-                        aria-label="Reject — hide review"
-                        disabled={actionsDisabled}
-                        onClick={() => onReject(id)}
-                      >
-                        ❌
-                      </button>
+                      <div className="moderation-action-group">
+                        <button
+                          type="button"
+                          className="moderation-action-btn moderation-action-btn--approve"
+                          aria-label="Approve — publish review"
+                          disabled={actionsDisabled}
+                          onClick={() => onApprove(id)}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          className="moderation-action-btn moderation-action-btn--reject"
+                          aria-label="Reject — hide review"
+                          disabled={actionsDisabled}
+                          onClick={() => onReject(id)}
+                        >
+                          Reject
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

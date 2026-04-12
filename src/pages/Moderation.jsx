@@ -1,12 +1,16 @@
 import '../styles/Moderation.css';
+import TablePagination from '../components/TablePagination';
 import ModerationTable from '../components/ModerationTable';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  fetchAllAdminReviews,
   listAdminReviews,
   messageFromFailedResponse,
   patchAdminReviewActivate,
   patchAdminReviewDeactivate,
 } from '../api/adminApi';
+import { downloadModerationPdf } from '../utils/moderationPdfExport';
+import { getTablePageSize } from '../utils/adminPreferences';
 import loadingDots from '../assets/loading-dots.svg';
 
 function formatInteger(value) {
@@ -46,18 +50,31 @@ function toContentPreview(review) {
   return `${mediaPrefix}"${truncateText(display, 120)}"`;
 }
 
-function toModerationStatusLabel(raw) {
-  const s = String(raw || '')
-    .trim()
-    .toUpperCase();
-  const map = {
-    PENDING: 'Pending review',
-    APPROVED: 'Approved',
-    AUTO_FLAGGED: 'Auto-flagged (AI)',
-    MANUALLY_FLAGGED: 'User-reported',
-    REJECTED: 'Rejected',
-  };
-  return map[s] || (raw ? String(raw) : '—');
+/** ReviewResponseDto: isCollaborative, productId, productName, likeCount */
+function formatCollaborativeLabel(review) {
+  const v = review?.isCollaborative ?? review?.is_collaborative;
+  if (v == null) return '—';
+  return v === true || v === 'true' || v === 1 ? 'Yes' : 'No';
+}
+
+function formatReviewLikeCount(review) {
+  const n = review?.likeCount ?? review?.like_count;
+  if (n == null) return '—';
+  const num = Number(n);
+  if (!Number.isFinite(num)) return '—';
+  return formatInteger(num) ?? String(n);
+}
+
+function formatProductLabel(review) {
+  const nameRaw = review?.productName ?? review?.product_name;
+  const idRaw = review?.productId ?? review?.product_id;
+  const name = nameRaw != null ? String(nameRaw).trim() : '';
+  const idStr =
+    idRaw != null && String(idRaw).trim() !== '' ? String(idRaw).trim() : '';
+  if (name && idStr) return `${name} (#${idStr})`;
+  if (name) return name;
+  if (idStr) return `Product #${idStr}`;
+  return '—';
 }
 
 /**
@@ -118,8 +135,40 @@ function toxicityToPercent(raw) {
   return null;
 }
 
+/** Arayüz: 0–30 yeşil, 31–69 turuncu, 70–100 kırmızı (toxicity yüzdesi). */
+function aiScoreToneFromPercent(pct) {
+  if (pct == null || !Number.isFinite(pct)) return null;
+  if (pct <= 30) return 'low';
+  if (pct >= 70) return 'high';
+  return 'mid';
+}
+
+function aiScoreEmojiFromTone(tone) {
+  if (tone === 'low') return '🟢';
+  if (tone === 'high') return '🔴';
+  if (tone === 'mid') return '🟠';
+  return '';
+}
+
+/** formatAiScoreFromReview ile aynı yüzde kaynağı; filtre eşlemesi için */
+function getPercentForFilter(review) {
+  const raw = extractToxicityScore(review);
+  let pct = toxicityToPercent(raw);
+  if (pct == null) {
+    const text = buildTextForLocalToxicityEstimate(review);
+    pct = estimateToxicityPercentFromText(text);
+  }
+  return pct != null && Number.isFinite(pct) ? pct : null;
+}
+
+function getReviewScoreTone(review) {
+  const pct = getPercentForFilter(review);
+  if (pct == null) return null;
+  return aiScoreToneFromPercent(pct);
+}
+
 /**
- * Backend ToxicityService ile aynı bantlar: ≥0.80 kritik, ≥0.50 uyarı.
+ * Skor kaynağı backend (ToxicityService eşikleri sunucuda farklı olabilir).
  * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/Service/Moderation/ToxicityService.java
  */
 function formatAiScoreFromReview(review) {
@@ -141,90 +190,84 @@ function formatAiScoreFromReview(review) {
     .toUpperCase();
 
   if (pct != null) {
-    let emoji = '🟢';
-    if (pct >= 80) emoji = '🔴';
-    else if (pct >= 50) emoji = '🟠';
+    const scoreTone = aiScoreToneFromPercent(pct);
+    const emoji = aiScoreEmojiFromTone(scoreTone);
     const display = `${emoji} ${pct}%`;
+    const bandHint =
+      'Arayüz: 🟢 0–30, 🟠 31–69, 🔴 70–100; yüzde metni aynı renkte.';
     const title =
       source === 'api'
         ? raw != null
-          ? `Backend toxicityScore: ${raw.toFixed(4)} → ${pct}%. Eşikler: ≥80% gizleme, ≥50% işaretleme.`
+          ? `Backend toxicityScore: ${raw.toFixed(4)} → ${pct}%. ${bandHint}`
           : undefined
-        : `API'de toxicityScore yok (kayıtta HF skoru yok). Yerel metin tahmini: ${pct}% — kalıcı skor için sunucuda HUGGINGFACE_API_TOKEN ve yeniden analiz gerekir.`;
-    return { display, title };
+        : `API'de toxicityScore yok (kayıtta HF skoru yok). Yerel metin tahmini: ${pct}%. ${bandHint} Kalıcı skor için sunucuda HUGGINGFACE_API_TOKEN ve yeniden analiz gerekir.`;
+    return { display, title, scoreTone };
   }
 
   if (status === 'PENDING') {
     return {
       display: '⏳ Pending AI',
       title: 'Skor henüz yok veya HuggingFace analizi bekleniyor.',
+      scoreTone: null,
     };
   }
   if (status === 'AUTO_FLAGGED') {
     return {
       display: '⚠️ —',
       title: 'İşaretli; toxicity skoru yanıtta yok (veri tutarsızlığı olabilir).',
+      scoreTone: null,
     };
   }
 
-  return { display: '—', title: undefined };
+  return { display: '—', title: undefined, scoreTone: null };
 }
 
-function scrollToModerationTop() {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
+const MODERATION_POLL_MS = 5000;
 
-function getVisiblePages({ page, totalPages, maxButtons = 3 }) {
-  if (typeof totalPages !== 'number' || !Number.isFinite(totalPages) || totalPages <= 0) {
-    return [page];
-  }
-  const safeMax = Math.max(1, Math.floor(maxButtons));
-  const last = totalPages - 1;
-  let start = Math.max(0, page - Math.floor(safeMax / 2));
-  let end = Math.min(last, start + safeMax - 1);
-  start = Math.max(0, end - safeMax + 1);
-  const pages = [];
-  for (let p = start; p <= end; p += 1) pages.push(p);
-  return pages;
+function mapReviewDtoToRow(r, pageNum, idx) {
+  const rawId = r?.id ?? r?.reviewId;
+  const { display, title, scoreTone } = formatAiScoreFromReview(r);
+  return {
+    id: rawId != null ? String(rawId) : `${pageNum}-${idx}`,
+    hasNumericId: rawId != null && String(rawId).trim() !== '' && Number.isFinite(Number(rawId)),
+    contentPreview: toContentPreview(r),
+    productLabel: formatProductLabel(r),
+    collaborativeLabel: formatCollaborativeLabel(r),
+    likeCountDisplay: formatReviewLikeCount(r),
+    aiScore: display,
+    aiScoreTitle: title,
+    aiScoreTone: scoreTone,
+  };
 }
 
 function mapAdminPageDtoToRows(dto, pageNum) {
   const content = Array.isArray(dto?.content) ? dto.content : [];
-  return content.map((r, idx) => {
-    const rawId = r?.id ?? r?.reviewId;
-    const { display, title } = formatAiScoreFromReview(r);
-    return {
-      id: rawId != null ? String(rawId) : `${pageNum}-${idx}`,
-      hasNumericId: rawId != null && String(rawId).trim() !== '' && Number.isFinite(Number(rawId)),
-      contentPreview: toContentPreview(r),
-      flagReason: toModerationStatusLabel(r?.moderationStatus),
-      aiScore: display,
-      aiScoreTitle: title,
-    };
-  });
+  return content.map((r, idx) => mapReviewDtoToRow(r, pageNum, idx));
 }
 
 function readPageMeta(dto) {
-  return {
-    totalElements:
-      typeof dto?.totalElements === 'number'
-        ? dto.totalElements
-        : dto?.totalElements != null
-          ? Number(dto.totalElements)
-          : null,
-    totalPages:
-      typeof dto?.totalPages === 'number'
-        ? dto.totalPages
-        : dto?.totalPages != null
-          ? Number(dto.totalPages)
-          : null,
-  };
+  let totalElements = null;
+  let totalPages = null;
+  const te =
+    dto?.totalElements ?? dto?.total_elements ?? dto?.total ?? dto?.page?.totalElements;
+  if (te != null) {
+    const n = typeof te === 'number' ? te : Number(te);
+    if (Number.isFinite(n)) totalElements = n;
+  }
+  const tp = dto?.totalPages ?? dto?.total_pages ?? dto?.page?.totalPages;
+  if (tp != null) {
+    const n = typeof tp === 'number' ? tp : Number(tp);
+    if (Number.isFinite(n)) totalPages = n;
+  }
+  return { totalElements, totalPages };
 }
 
 const Moderation = () => {
   const [page, setPage] = useState(0);
-  const [size] = useState(15);
-  const [activeOnly, setActiveOnly] = useState(false);
+  const [size] = useState(() => getTablePageSize());
+  const [scoreFilter, setScoreFilter] = useState(
+    /** @type {'all' | 'low' | 'mid' | 'high'} */ ('all')
+  );
   const [rows, setRows] = useState([]);
   const [totalElements, setTotalElements] = useState(null);
   const [totalPages, setTotalPages] = useState(null);
@@ -232,60 +275,155 @@ const Moderation = () => {
   const [error, setError] = useState(null);
   const [actionBusyId, setActionBusyId] = useState(null);
   const [actionFeedback, setActionFeedback] = useState(null);
+  const [pollTick, setPollTick] = useState(0);
+  const [listVersion, setListVersion] = useState(0);
+  const pollSilentRef = useRef(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    let alive = true;
+    const t = window.setInterval(() => {
+      pollSilentRef.current = true;
+      setPollTick((n) => n + 1);
+    }, MODERATION_POLL_MS);
+    return () => window.clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    setActionFeedback(null);
-    scrollToModerationTop();
+    const silent = pollSilentRef.current;
+    pollSilentRef.current = false;
+
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+      setActionFeedback(null);
+    }
+
     (async () => {
       try {
-        const res = await listAdminReviews({
-          page,
-          size,
-          activeOnly,
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          throw new Error(`Request failed (${res.status})`);
+        if (scoreFilter === 'all') {
+          const res = await listAdminReviews({
+            page,
+            size,
+            activeOnly: false,
+            signal: controller.signal,
+          });
+          if (cancelled) return;
+          if (!res.ok) {
+            throw new Error(`Request failed (${res.status})`);
+          }
+          const dto = await res.json();
+          if (cancelled) return;
+          setError(null);
+          setRows(mapAdminPageDtoToRows(dto, page));
+          const meta = readPageMeta(dto);
+          setTotalElements(meta.totalElements);
+          setTotalPages(meta.totalPages);
+        } else {
+          const all = await fetchAllAdminReviews({
+            activeOnly: false,
+            pageSize: 200,
+            signal: controller.signal,
+          });
+          if (cancelled) return;
+          const filtered = all.filter((r) => getReviewScoreTone(r) === scoreFilter);
+          const n = filtered.length;
+          const tp = n === 0 ? 0 : Math.ceil(n / size);
+          const slice = filtered.slice(page * size, page * size + size);
+          setError(null);
+          setRows(slice.map((r, idx) => mapReviewDtoToRow(r, page, idx)));
+          setTotalElements(n);
+          setTotalPages(tp);
         }
-        const dto = await res.json();
-        if (!alive) return;
-        setRows(mapAdminPageDtoToRows(dto, page));
-        const meta = readPageMeta(dto);
-        setTotalElements(meta.totalElements);
-        setTotalPages(meta.totalPages);
       } catch (e) {
-        if (!alive) return;
-        if (e?.name === 'AbortError') return;
+        if (cancelled) return;
+        if (e && typeof e === 'object' && 'name' in e && e.name === 'AbortError') return;
         setRows([]);
         setTotalElements(null);
         setTotalPages(null);
-        setError(
-          e instanceof Error ? `Failed to load reviews: ${e.message}` : 'Failed to load reviews.'
-        );
+        setError(e instanceof Error ? e.message : 'Unknown error');
       } finally {
-        if (alive) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
-      alive = false;
+      cancelled = true;
       controller.abort();
     };
-  }, [page, size, activeOnly]);
+  }, [page, size, scoreFilter, pollTick, listVersion]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (typeof totalPages !== 'number' || !Number.isFinite(totalPages)) return;
+    if (totalPages <= 0) {
+      if (page > 0) setPage(0);
+      return;
+    }
+    if (page >= totalPages) setPage(totalPages - 1);
+  }, [loading, page, totalPages]);
 
   const formattedTotal = useMemo(() => formatInteger(totalElements), [totalElements]);
-  const showingFrom = totalElements == null ? 0 : page * size + (rows.length > 0 ? 1 : 0);
-  const showingTo = totalElements == null ? rows.length : page * size + rows.length;
+  const showingFrom = rows.length === 0 ? 0 : page * size + 1;
+  const showingTo = page * size + rows.length;
   const canPrev = page > 0 && !loading;
   const canNext =
-    !loading && (typeof totalPages === 'number' ? page + 1 < totalPages : rows.length === size);
-  const visiblePages = useMemo(
-    () => getVisiblePages({ page, totalPages, maxButtons: 3 }),
-    [page, totalPages]
-  );
+    !loading &&
+    (typeof totalPages === 'number' && totalPages > 0
+      ? page + 1 < totalPages
+      : scoreFilter === 'all' && rows.length === size);
+  const pageStatusText = useMemo(() => {
+    const tp =
+      typeof totalPages === 'number' && totalPages > 0 ? String(totalPages) : '—';
+    return `Page ${page + 1} of ${tp}`;
+  }, [page, totalPages]);
+
+  const goPrev = () => setPage((p) => Math.max(0, p - 1));
+  const goNext = () => setPage((p) => p + 1);
+
+  async function handleExportPdf() {
+    if (exporting) return;
+    setActionFeedback(null);
+    setExporting(true);
+    try {
+      const reviews = await fetchAllAdminReviews({
+        activeOnly: false,
+      });
+      const filtered =
+        scoreFilter === 'all'
+          ? reviews
+          : reviews.filter((r) => getReviewScoreTone(r) === scoreFilter);
+      const rows = filtered.map((r, idx) => mapReviewDtoToRow(r, 0, idx));
+      const filterLabel =
+        scoreFilter === 'all'
+          ? 'All reviews'
+          : scoreFilter === 'low'
+            ? 'AI score: Low (0–30)'
+            : scoreFilter === 'mid'
+              ? 'AI score: Mid (31–69)'
+              : 'AI score: High (70–100)';
+      downloadModerationPdf({
+        rows: rows.map(
+          ({ contentPreview, productLabel, collaborativeLabel, likeCountDisplay, aiScore }) => ({
+            contentPreview,
+            productLabel,
+            collaborativeLabel,
+            likeCountDisplay,
+            aiScore,
+          })
+        ),
+        filterLabel,
+      });
+      setActionFeedback({ ok: true, message: 'PDF downloaded.' });
+    } catch (e) {
+      setActionFeedback({
+        ok: false,
+        message: e instanceof Error ? e.message : 'Export failed.',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const handleApprove = async (id) => {
     if (actionBusyId != null) return;
@@ -297,16 +435,7 @@ const Moderation = () => {
         const msg = await messageFromFailedResponse(res);
         throw new Error(msg);
       }
-      const refresh = await listAdminReviews({ page, size, activeOnly });
-      if (!refresh.ok) {
-        const msg = await messageFromFailedResponse(refresh);
-        throw new Error(msg);
-      }
-      const dto = await refresh.json();
-      setRows(mapAdminPageDtoToRows(dto, page));
-      const meta = readPageMeta(dto);
-      setTotalElements(meta.totalElements);
-      setTotalPages(meta.totalPages);
+      setListVersion((v) => v + 1);
       setActionFeedback({ ok: true, message: 'Review approved (published).' });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unknown error';
@@ -326,16 +455,7 @@ const Moderation = () => {
         const msg = await messageFromFailedResponse(res);
         throw new Error(msg);
       }
-      const refresh = await listAdminReviews({ page, size, activeOnly });
-      if (!refresh.ok) {
-        const msg = await messageFromFailedResponse(refresh);
-        throw new Error(msg);
-      }
-      const dto = await refresh.json();
-      setRows(mapAdminPageDtoToRows(dto, page));
-      const meta = readPageMeta(dto);
-      setTotalElements(meta.totalElements);
-      setTotalPages(meta.totalPages);
+      setListVersion((v) => v + 1);
       setActionFeedback({ ok: true, message: 'Review rejected (hidden).' });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unknown error';
@@ -347,111 +467,145 @@ const Moderation = () => {
 
   return (
     <div className="moderation-page">
-      <h2 className="moderation-main-title">Content Moderation Queue</h2>
+      <div className="moderation-page-inner">
+        <header className="moderation-header">
+          <h2 className="moderation-main-title">Content moderation</h2>
+          <p className="moderation-subtitle">
+            Review queued content, filter by AI toxicity score band, and publish or hide reviews.
+          </p>
+        </header>
 
-      <div className="moderation-toolbar" aria-label="Moderation queue controls">
-        <div className="moderation-toolbar-count">
-          <span>
-            Reviews (
-            {loading && formattedTotal == null ? 'Loading…' : formattedTotal ?? '—'})
-          </span>
-        </div>
-        <span className="moderation-toolbar-meta">
-          Filter:{' '}
+        <div className="moderation-toolbar" aria-label="Moderation queue controls">
+          <div
+            className="moderation-total-pill"
+            title="Total reviews matching the current filter"
+          >
+            <span className="moderation-total-pill-label">
+              {scoreFilter === 'all'
+                ? 'All reviews'
+                : scoreFilter === 'low'
+                  ? 'Low (0–30)'
+                  : scoreFilter === 'mid'
+                    ? 'Mid (31–69)'
+                    : 'High (70–100)'}
+            </span>
+            <span className="moderation-total-pill-value" aria-live="polite">
+              {loading && formattedTotal == null ? '…' : formattedTotal ?? '—'}
+            </span>
+          </div>
+          <div
+            className="moderation-filter-segment moderation-filter-segment--score"
+            role="group"
+            aria-label="Filter by AI score band"
+          >
+            {[
+              ['all', 'All', 'All reviews'],
+              ['low', '🟢 Low', 'AI score band 0–30'],
+              ['mid', '🟠 Mid', 'AI score band 31–69'],
+              ['high', '🔴 High', 'AI score band 70–100'],
+            ].map(([id, label, hint]) => (
+              <button
+                key={id}
+                type="button"
+                className={
+                  scoreFilter === id
+                    ? 'moderation-filter-segment-btn moderation-filter-segment-btn--active'
+                    : 'moderation-filter-segment-btn'
+                }
+                title={hint}
+                onClick={() => {
+                  if (scoreFilter === id) return;
+                  setPage(0);
+                  setScoreFilter(/** @type {'all' | 'low' | 'mid' | 'high'} */ (id));
+                }}
+                disabled={loading}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
-            onClick={() => {
-              setPage(0);
-              setActiveOnly((v) => !v);
-            }}
-            disabled={loading}
-            aria-label="Toggle active-only filter"
+            className="moderation-toolbar-export"
+            title="Download PDF of reviews matching the current filter"
+            onClick={handleExportPdf}
+            disabled={loading || exporting}
           >
-            {activeOnly ? 'Active only' : 'All'} ⌄
+            {exporting ? 'Exporting…' : 'Export'}
           </button>
-        </span>
-        <span className="moderation-toolbar-meta">Approve / Reject</span>
+        </div>
+
+        {error && (
+          <div className="moderation-alert moderation-alert--error" role="alert">
+            Failed to load reviews: {error}
+          </div>
+        )}
+
+        {actionFeedback && (
+          <div
+            className={
+              actionFeedback.ok
+                ? 'moderation-alert moderation-alert--success'
+                : 'moderation-alert moderation-alert--error'
+            }
+            role="status"
+          >
+            {actionFeedback.message}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="moderation-loading" aria-live="polite" aria-busy="true">
+            <img src={loadingDots} alt="" />
+            <div className="moderation-loading-text">Loading moderation queue…</div>
+          </div>
+        ) : !error && rows.length === 0 ? (
+          <div className="moderation-empty" role="status">
+            <p className="moderation-empty-title">No reviews to show</p>
+            <p className="moderation-empty-hint">
+              {scoreFilter === 'all'
+                ? 'No review records were returned for this page.'
+                : 'No reviews match this AI score filter (or scores are still pending).'}
+            </p>
+          </div>
+        ) : !error ? (
+          <>
+            <div className="moderation-pagination-bar moderation-pagination-bar--top">
+              <TablePagination
+                ariaLabel="Moderation list pages (top)"
+                statusText={pageStatusText}
+                canPrev={canPrev}
+                canNext={canNext}
+                onPrev={goPrev}
+                onNext={goNext}
+              />
+            </div>
+            <ModerationTable
+              items={rows}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              actionBusyId={actionBusyId}
+            />
+          </>
+        ) : null}
+
+        <footer className="moderation-footer">
+          <p className="moderation-footer-summary">
+            Showing {showingFrom}-{showingTo} of{' '}
+            {loading && formattedTotal == null ? '…' : formattedTotal ?? '—'} reviews
+          </p>
+          <div className="moderation-pagination-bar moderation-pagination-bar--bottom">
+            <TablePagination
+              ariaLabel="Moderation list pages (bottom)"
+              statusText={pageStatusText}
+              canPrev={canPrev}
+              canNext={canNext}
+              onPrev={goPrev}
+              onNext={goNext}
+            />
+          </div>
+        </footer>
       </div>
-
-      {error && (
-        <div role="alert" style={{ margin: '12px 0' }}>
-          {error}
-        </div>
-      )}
-
-      {actionFeedback && (
-        <div
-          role="status"
-          style={{
-            margin: '8px 0 12px',
-            color: actionFeedback.ok ? '#0d5d2a' : '#910029',
-          }}
-        >
-          {actionFeedback.message}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="moderation-loading" aria-live="polite" aria-busy="true">
-          <img src={loadingDots} alt="Loading" />
-          <div className="moderation-loading-text">Loading moderation queue…</div>
-        </div>
-      ) : (
-        <ModerationTable
-          items={rows}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          actionBusyId={actionBusyId}
-        />
-      )}
-
-      <footer className="moderation-footer">
-        <p className="moderation-footer-summary">
-          Showing {showingFrom}-{showingTo} of{' '}
-          {loading && formattedTotal == null ? 'Loading…' : formattedTotal ?? '—'} reviews
-        </p>
-        <nav className="moderation-pagination" aria-label="Pagination">
-          <button
-            type="button"
-            disabled={!canPrev}
-            onClick={() => {
-              scrollToModerationTop();
-              setPage((p) => Math.max(0, p - 1));
-            }}
-          >
-            &lt; Prev
-          </button>
-          {visiblePages.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={
-                p === page
-                  ? 'moderation-pagination-page moderation-pagination-page--active'
-                  : 'moderation-pagination-page'
-              }
-              aria-current={p === page ? 'page' : undefined}
-              disabled={loading}
-              onClick={() => {
-                scrollToModerationTop();
-                setPage(p);
-              }}
-            >
-              {p + 1}
-            </button>
-          ))}
-          <button
-            type="button"
-            disabled={!canNext}
-            onClick={() => {
-              scrollToModerationTop();
-              setPage((p) => p + 1);
-            }}
-          >
-            Next &gt;
-          </button>
-        </nav>
-      </footer>
     </div>
   );
 };

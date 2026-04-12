@@ -262,6 +262,18 @@ function readPageMeta(dto) {
   return { totalElements, totalPages };
 }
 
+function reviewMatchesSearch(review, qLower) {
+  if (!qLower) return true;
+  const id = review?.id != null ? String(review.id) : '';
+  const title = review?.title != null ? String(review.title) : '';
+  const desc = review?.description != null ? String(review.description) : '';
+  const productName = String(review?.productName ?? review?.product_name ?? '').trim();
+  const pid = review?.productId ?? review?.product_id;
+  const productIdStr = pid != null ? String(pid) : '';
+  const hay = `${id} ${title} ${desc} ${productName} ${productIdStr}`.toLowerCase();
+  return hay.includes(qLower);
+}
+
 const Moderation = () => {
   const [page, setPage] = useState(0);
   const [size] = useState(() => getTablePageSize());
@@ -279,6 +291,10 @@ const Moderation = () => {
   const [listVersion, setListVersion] = useState(0);
   const pollSilentRef = useRef(false);
   const [exporting, setExporting] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+
+  const searchTrim = useMemo(() => searchInput.trim().toLowerCase(), [searchInput]);
+  const isSearchActive = searchTrim.length > 0;
 
   useEffect(() => {
     const t = window.setInterval(() => {
@@ -294,15 +310,40 @@ const Moderation = () => {
     const silent = pollSilentRef.current;
     pollSilentRef.current = false;
 
-    if (!silent) {
+    if (isSearchActive && silent) return;
+
+    if (!silent && !isSearchActive) {
       setLoading(true);
       setError(null);
       setActionFeedback(null);
     }
+    if (!silent && isSearchActive) {
+      setLoading(true);
+      setError(null);
+    }
 
     (async () => {
       try {
-        if (scoreFilter === 'all') {
+        if (isSearchActive) {
+          const all = await fetchAllAdminReviews({
+            activeOnly: false,
+            pageSize: 200,
+            signal: controller.signal,
+          });
+          if (cancelled) return;
+          let filtered = all;
+          if (scoreFilter !== 'all') {
+            filtered = filtered.filter((r) => getReviewScoreTone(r) === scoreFilter);
+          }
+          filtered = filtered.filter((r) => reviewMatchesSearch(r, searchTrim));
+          const n = filtered.length;
+          const tp = n === 0 ? 0 : Math.ceil(n / size);
+          const slice = filtered.slice(page * size, page * size + size);
+          setError(null);
+          setRows(slice.map((r, idx) => mapReviewDtoToRow(r, page, idx)));
+          setTotalElements(n);
+          setTotalPages(tp);
+        } else if (scoreFilter === 'all') {
           const res = await listAdminReviews({
             page,
             size,
@@ -351,7 +392,11 @@ const Moderation = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [page, size, scoreFilter, pollTick, listVersion]);
+  }, [page, size, scoreFilter, pollTick, listVersion, isSearchActive, searchTrim]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchTrim]);
 
   useEffect(() => {
     if (loading) return;
@@ -371,7 +416,7 @@ const Moderation = () => {
     !loading &&
     (typeof totalPages === 'number' && totalPages > 0
       ? page + 1 < totalPages
-      : scoreFilter === 'all' && rows.length === size);
+      : !isSearchActive && scoreFilter === 'all' && rows.length === size);
   const pageStatusText = useMemo(() => {
     const tp =
       typeof totalPages === 'number' && totalPages > 0 ? String(totalPages) : '—';
@@ -389,10 +434,13 @@ const Moderation = () => {
       const reviews = await fetchAllAdminReviews({
         activeOnly: false,
       });
-      const filtered =
+      let filtered =
         scoreFilter === 'all'
           ? reviews
           : reviews.filter((r) => getReviewScoreTone(r) === scoreFilter);
+      if (isSearchActive) {
+        filtered = filtered.filter((r) => reviewMatchesSearch(r, searchTrim));
+      }
       const rows = filtered.map((r, idx) => mapReviewDtoToRow(r, 0, idx));
       const filterLabel =
         scoreFilter === 'all'
@@ -402,6 +450,7 @@ const Moderation = () => {
             : scoreFilter === 'mid'
               ? 'AI score: Mid (31–69)'
               : 'AI score: High (70–100)';
+      const searchSuffix = isSearchActive ? ` · Search: "${searchInput.trim()}"` : '';
       downloadModerationPdf({
         rows: rows.map(
           ({ contentPreview, productLabel, collaborativeLabel, likeCountDisplay, aiScore }) => ({
@@ -412,7 +461,7 @@ const Moderation = () => {
             aiScore,
           })
         ),
-        filterLabel,
+        filterLabel: `${filterLabel}${searchSuffix}`,
       });
       setActionFeedback({ ok: true, message: 'PDF downloaded.' });
     } catch (e) {
@@ -524,6 +573,17 @@ const Moderation = () => {
               </button>
             ))}
           </div>
+          <div className="moderation-toolbar-search">
+            <input
+              type="search"
+              className="moderation-toolbar-search-input"
+              placeholder="Search by product, text, review ID…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              aria-label="Search reviews"
+              autoComplete="off"
+            />
+          </div>
           <button
             type="button"
             className="moderation-toolbar-export"
@@ -563,9 +623,11 @@ const Moderation = () => {
           <div className="moderation-empty" role="status">
             <p className="moderation-empty-title">No reviews to show</p>
             <p className="moderation-empty-hint">
-              {scoreFilter === 'all'
-                ? 'No review records were returned for this page.'
-                : 'No reviews match this AI score filter (or scores are still pending).'}
+              {isSearchActive
+                ? 'No reviews match this search. Try different keywords.'
+                : scoreFilter === 'all'
+                  ? 'No review records were returned for this page.'
+                  : 'No reviews match this AI score filter (or scores are still pending).'}
             </p>
           </div>
         ) : !error ? (

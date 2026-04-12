@@ -72,6 +72,38 @@
   margin-bottom: 1.25rem;
 }
 
+.products-toolbar-search {
+  flex: 1;
+  min-width: min(100%, 12rem);
+  max-width: 22rem;
+}
+
+.products-toolbar-search-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--products-border);
+  background: var(--products-surface);
+  color: var(--products-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.875rem;
+}
+
+.products-toolbar-search-input::placeholder {
+  color: var(--products-text-muted);
+}
+
+.products-toolbar-search-input:focus {
+  outline: none;
+  border-color: var(--products-accent);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+}
+
 .products-total-pill {
   display: inline-flex;
   flex-direction: column;

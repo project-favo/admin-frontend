@@ -1,9 +1,15 @@
 .users-table-wrap {
+  --users-table-accent: #910029;
+  --users-table-border: rgba(0, 0, 0, 0.08);
+  --users-table-surface: #ffffff;
+  --users-table-muted: #f5f5f6;
+  --users-table-text: #1a1a1a;
+  --users-table-text-muted: #5c5c5c;
   width: 100%;
-  max-width: 1119px;
-  padding: 20px 16px;
-  background: #d9d9d9;
-  border-radius: 20px;
+  max-width: min(56rem, 100%);
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
   box-sizing: border-box;
 }
 
@@ -11,37 +17,150 @@
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  padding: 1rem 1.125rem;
+  background: var(--users-table-muted);
+  border: 1px solid var(--users-table-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
 }
 
 .users-table {
   width: 100%;
   min-width: 640px;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
+  background: var(--users-table-surface);
+  border-radius: 10px;
+  border: 1px solid var(--users-table-border);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset;
+}
+
+.users-table thead tr:first-child th:first-child {
+  border-top-left-radius: 10px;
+}
+
+.users-table thead tr:first-child th:last-child {
+  border-top-right-radius: 10px;
+}
+
+.users-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 10px;
+}
+
+.users-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 10px;
 }
 
 .users-table thead th {
-  color: #000;
-  font-size: clamp(1rem, 1.8vw, 24px);
-  font-family: 'Abril Fatface', serif;
-  font-weight: 400;
-  letter-spacing: 0.03em;
-  text-align: center;
+  color: var(--users-table-text-muted);
+  font-size: 0.6875rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
   vertical-align: bottom;
-  padding: 0 8px 12px;
-  border-bottom: 1px solid #000;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(to bottom, #fafafa, #f3f3f4);
+  border-bottom: 1px solid var(--users-table-border);
+}
+
+.users-table thead th:first-child {
+  padding-left: 1rem;
 }
 
 .users-table tbody td {
-  color: #000;
-  font-size: clamp(0.9rem, 1.5vw, 20px);
-  font-family: 'Abril Fatface', serif;
+  color: var(--users-table-text);
+  font-size: 0.9375rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   font-weight: 400;
-  letter-spacing: 0.03em;
-  text-align: center;
+  letter-spacing: 0.01em;
+  text-align: left;
   vertical-align: middle;
-  padding: 16px 8px;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   word-break: break-word;
+}
+
+.users-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.users-table tbody tr:hover td {
+  background: rgba(145, 0, 41, 0.03);
+}
+
+.users-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(145, 0, 41, 0.12), rgba(145, 0, 41, 0.06));
+  border: 1px solid rgba(145, 0, 41, 0.2);
+  color: var(--users-table-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+.users-cell-username {
+  font-weight: 600;
+  color: var(--users-table-text);
+}
+
+.users-cell-email {
+  color: var(--users-table-text-muted);
+  font-size: 0.9rem;
+}
+
+.users-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+}
+
+.users-status-badge--active {
+  background: rgba(22, 120, 70, 0.12);
+  color: #166534;
+  border: 1px solid rgba(22, 120, 70, 0.25);
+}
+
+.users-status-badge--suspend {
+  background: rgba(180, 35, 35, 0.1);
+  color: #9f1239;
+  border: 1px solid rgba(180, 35, 35, 0.22);
+}
+
+.users-status-badge--unknown {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--users-table-text-muted);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .users-actions {
@@ -49,52 +168,57 @@
   display: inline-block;
 }
 
-.users-actions > summary {
-  list-style: none;
-}
-.users-actions > summary::-webkit-details-marker {
-  display: none;
-}
-
 .users-actions-trigger {
   display: inline-grid;
   place-items: center;
-  width: 38px;
-  height: 34px;
+  width: 2.125rem;
+  height: 2.125rem;
+  margin: 0;
+  padding: 0;
   border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
   cursor: pointer;
   user-select: none;
+  color: var(--users-table-text-muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0;
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .users-actions-trigger:hover {
   background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: var(--users-table-text);
 }
 
-.users-actions-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 20;
-  min-width: 120px;
-  padding: 8px;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.14);
+.users-actions-menu-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
 }
 
 .users-actions-item {
   width: 100%;
   text-align: left;
-  padding: 10px 10px;
+  padding: 0.55rem 0.65rem;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
-  color: #000;
-  font-size: 16px;
-  font-family: 'Abril Fatface', serif;
-  font-weight: 400;
-  letter-spacing: 0.03em;
+  color: var(--users-table-text);
+  font-size: 0.875rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   cursor: pointer;
 }
 
@@ -108,7 +232,7 @@
 }
 
 .users-table-col-avatar {
-  width: 85px;
+  width: 4.25rem;
 }
 
 .users-table-col-username {
@@ -124,13 +248,23 @@
 }
 
 .users-table-col-actions {
-  width: 72px;
+  width: 4rem;
+  text-align: right;
+}
+
+.users-table thead th:last-child,
+.users-table tbody td:last-child {
+  text-align: right;
 }
 
 @media (max-width: 768px) {
+  .users-table-scroll {
+    padding: 0.75rem;
+  }
+
   .users-table thead th,
   .users-table tbody td {
-    padding-left: 4px;
-    padding-right: 4px;
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
   }
 }

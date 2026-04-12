@@ -134,6 +134,20 @@ const Dashboard = () => {
 
     async function fetchReviews(signal) {
       try {
+        const resTotalAll = await listAdminReviews({
+          page: 0,
+          size: 1,
+          activeOnly: false,
+          signal,
+        });
+        if (resTotalAll.ok) {
+          const dtoTotal = await resTotalAll.json();
+          const teAll = Number(dtoTotal?.totalElements);
+          if (alive && Number.isFinite(teAll) && teAll >= 0) {
+            setReviewCountTotal(teAll);
+          }
+        }
+
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const tomorrowStart = new Date(todayStart);
@@ -143,8 +157,9 @@ const Dashboard = () => {
         let totalPages = 1;
         let todayCount = 0;
         let sponsoredCount = 0;
-        let totalReviewsHint = null;
-        let scannedReviews = 0;
+        /** Aktif review sayısı (sponsored oranı paydası); Moderation “All” ile karıştırılmaz */
+        let totalActiveReviewsHint = null;
+        let scannedActiveReviews = 0;
         const maxPages = 25;
 
         while (page < totalPages && page < maxPages) {
@@ -160,9 +175,9 @@ const Dashboard = () => {
           const content = Array.isArray(dto?.content) ? dto.content : [];
           if (page === 0 && dto?.totalElements != null) {
             const te = Number(dto.totalElements);
-            if (Number.isFinite(te)) totalReviewsHint = te;
+            if (Number.isFinite(te)) totalActiveReviewsHint = te;
           }
-          scannedReviews += content.length;
+          scannedActiveReviews += content.length;
 
           for (const r of content) {
             if (isReviewSponsoredLike(r)) sponsoredCount += 1;
@@ -178,17 +193,12 @@ const Dashboard = () => {
         if (!alive) return;
         setDailyReviewsToday(todayCount);
 
-        const totalForRatio =
-          typeof totalReviewsHint === 'number' && totalReviewsHint >= 0
-            ? totalReviewsHint
-            : scannedReviews;
-        if (alive) {
-          setReviewCountTotal(
-            typeof totalForRatio === 'number' && totalForRatio >= 0 ? totalForRatio : null
-          );
-        }
-        if (totalForRatio > 0) {
-          setSponsoredRatioPct((sponsoredCount / totalForRatio) * 100);
+        const totalForSponsoredRatio =
+          typeof totalActiveReviewsHint === 'number' && totalActiveReviewsHint >= 0
+            ? totalActiveReviewsHint
+            : scannedActiveReviews;
+        if (totalForSponsoredRatio > 0) {
+          setSponsoredRatioPct((sponsoredCount / totalForSponsoredRatio) * 100);
         } else {
           setSponsoredRatioPct(0);
         }

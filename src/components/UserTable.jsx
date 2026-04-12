@@ -1,13 +1,25 @@
 import '../styles/UserTable.css';
-import { useEffect, useId, useState } from 'react';
+import AdminFloatingMenu, { isInsideAdminFloatingMenu } from './AdminFloatingMenu';
+import { useEffect, useId, useRef, useState } from 'react';
 
 /**
  * @typedef {Object} UserTableRow
  * @property {string} id
  * @property {string} username
  * @property {string} email
- * @property {string} status
+ * @property {string} statusLabel
+ * @property {'active' | 'suspend' | 'unknown'} statusKind
  */
+
+function initialsFromUsernameLabel(label) {
+  const s = String(label || '')
+    .replace(/^@/, '')
+    .trim();
+  if (!s) return '?';
+  const compact = s.replace(/[^a-zA-Z0-9]/g, '');
+  if (compact.length >= 2) return compact.slice(0, 2).toUpperCase();
+  return s.slice(0, 2).toUpperCase();
+}
 
 /**
  * @param {{ users: UserTableRow[], onUserAction?: (userId: string, action: 'activate' | 'suspend') => Promise<void> }} props
@@ -16,13 +28,7 @@ const UserTable = ({ users, onUserAction }) => {
   const menuIdPrefix = useId();
   const [openRowId, setOpenRowId] = useState(null);
   const [actingRowId, setActingRowId] = useState(null);
-
-  function getStatusKind(status) {
-    const s = String(status || '').toLowerCase();
-    if (s.includes('active')) return 'active';
-    if (s.includes('suspend')) return 'suspend';
-    return 'unknown';
-  }
+  const openTriggerRef = useRef(null);
 
   useEffect(() => {
     if (openRowId == null) return undefined;
@@ -31,6 +37,7 @@ const UserTable = ({ users, onUserAction }) => {
     function onPointerDown(e) {
       const target = e.target instanceof Element ? e.target : null;
       if (!target) return;
+      if (isInsideAdminFloatingMenu(target)) return;
       const container = document.querySelector(`[data-users-actions-row-id="${openRowId}"]`);
       if (!container) {
         setOpenRowId(null);
@@ -73,7 +80,7 @@ const UserTable = ({ users, onUserAction }) => {
           </colgroup>
           <thead>
             <tr>
-              <th scope="col">Avatar</th>
+              <th scope="col">User</th>
               <th scope="col">Username</th>
               <th scope="col">Email</th>
               <th scope="col">Status</th>
@@ -81,79 +88,93 @@ const UserTable = ({ users, onUserAction }) => {
             </tr>
           </thead>
           <tbody>
-            {users.map(({ id, username, email, status }) => {
-              const kind = getStatusKind(status);
+            {users.map(({ id, username, email, statusLabel, statusKind }) => {
+              const kind = statusKind ?? 'unknown';
               const menuId = `${menuIdPrefix}-${id}`;
               const isOpen = openRowId === id;
               const rowBusy = actingRowId === id;
+              const initials = initialsFromUsernameLabel(username);
               return (
                 <tr key={id}>
-                <td>👤</td>
-                <td>{username}</td>
-                <td>{email}</td>
-                <td>{status}</td>
-                <td>
-                  <details
-                    className="users-actions"
-                    aria-label="User actions"
-                    open={isOpen}
-                    data-users-actions-row-id={id}
-                    onToggle={(e) => {
-                      const nextOpen = e.currentTarget.open;
-                      setOpenRowId(nextOpen ? id : null);
-                    }}
-                  >
-                    <summary
-                      className="users-actions-trigger"
-                      aria-haspopup="menu"
-                      aria-controls={menuId}
-                      aria-busy={rowBusy}
-                      onClick={(e) => {
-                        // prevent native <details> toggle; we control it
-                        e.preventDefault();
-                        if (rowBusy) return;
-                        setOpenRowId((prev) => (prev === id ? null : id));
-                      }}
+                  <td>
+                    <span className="users-avatar" aria-hidden="true" title={username}>
+                      {initials}
+                    </span>
+                  </td>
+                  <td className="users-cell-username">{username}</td>
+                  <td className="users-cell-email">{email}</td>
+                  <td>
+                    <span
+                      className={
+                        kind === 'active'
+                          ? 'users-status-badge users-status-badge--active'
+                          : kind === 'suspend'
+                            ? 'users-status-badge users-status-badge--suspend'
+                            : 'users-status-badge users-status-badge--unknown'
+                      }
                     >
-                      ⋮
-                    </summary>
-                    <div id={menuId} className="users-actions-menu" role="menu">
-                      {kind === 'active' && (
-                        <button
-                          type="button"
-                          className="users-actions-item"
-                          role="menuitem"
-                          disabled={rowBusy || !onUserAction}
-                          onClick={() => runAction(id, 'suspend')}
-                        >
-                          Suspend
-                        </button>
-                      )}
-                      {kind === 'suspend' && (
-                        <button
-                          type="button"
-                          className="users-actions-item"
-                          role="menuitem"
-                          disabled={rowBusy || !onUserAction}
-                          onClick={() => runAction(id, 'activate')}
-                        >
-                          Activate
-                        </button>
-                      )}
-                      {kind === 'unknown' && (
-                        <button
-                          type="button"
-                          className="users-actions-item"
-                          role="menuitem"
-                          disabled
-                        >
-                          No actions available
-                        </button>
-                      )}
+                      {statusLabel}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="users-actions" data-users-actions-row-id={id}>
+                      <button
+                        type="button"
+                        ref={openRowId === id ? openTriggerRef : undefined}
+                        className="users-actions-trigger"
+                        aria-haspopup="menu"
+                        aria-expanded={isOpen}
+                        aria-controls={menuId}
+                        aria-busy={rowBusy}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (rowBusy) return;
+                          setOpenRowId((prev) => (prev === id ? null : id));
+                        }}
+                      >
+                        ⋮
+                      </button>
+                      {isOpen ? (
+                        <AdminFloatingMenu open triggerRef={openTriggerRef} id={menuId}>
+                          <div className="users-actions-menu-inner">
+                            {kind === 'active' && (
+                              <button
+                                type="button"
+                                className="users-actions-item"
+                                role="menuitem"
+                                disabled={rowBusy || !onUserAction}
+                                onClick={() => runAction(id, 'suspend')}
+                              >
+                                Suspend
+                              </button>
+                            )}
+                            {kind === 'suspend' && (
+                              <button
+                                type="button"
+                                className="users-actions-item"
+                                role="menuitem"
+                                disabled={rowBusy || !onUserAction}
+                                onClick={() => runAction(id, 'activate')}
+                              >
+                                Activate
+                              </button>
+                            )}
+                            {kind === 'unknown' && (
+                              <button
+                                type="button"
+                                className="users-actions-item"
+                                role="menuitem"
+                                disabled
+                              >
+                                No actions available
+                              </button>
+                            )}
+                          </div>
+                        </AdminFloatingMenu>
+                      ) : null}
                     </div>
-                  </details>
-                </td>
-              </tr>
+                  </td>
+                </tr>
               );
             })}
           </tbody>

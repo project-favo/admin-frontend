@@ -1,84 +1,198 @@
 .moderation-table-wrap {
+  --moderation-table-accent: #910029;
+  --moderation-table-border: rgba(0, 0, 0, 0.08);
+  --moderation-table-surface: #ffffff;
+  --moderation-table-muted: #f5f5f6;
+  --moderation-table-text: #1a1a1a;
+  --moderation-table-text-muted: #5c5c5c;
   width: 100%;
-  max-width: 1119px;
-  padding: 20px 16px;
-  background: #d9d9d9;
-  border-radius: 20px;
+  max-width: min(56rem, 100%);
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
   box-sizing: border-box;
 }
 
 .moderation-table-scroll {
+  container-type: inline-size;
+  container-name: moderation-table-scroll;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  padding: 1rem 1.125rem;
+  background: var(--moderation-table-muted);
+  border: 1px solid var(--moderation-table-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
 }
 
 .moderation-table {
   width: 100%;
-  min-width: 720px;
-  border-collapse: collapse;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
+  background: var(--moderation-table-surface);
+  border-radius: 10px;
+  border: 1px solid var(--moderation-table-border);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset;
+}
+
+/* Dar alanda tablo taban genişliği; genişte %100 ile tüm sütunlar sığar */
+@container moderation-table-scroll (max-width: 52rem) {
+  .moderation-table {
+    min-width: 52rem;
+  }
+}
+
+.moderation-table thead tr:first-child th:first-child {
+  border-top-left-radius: 10px;
+}
+
+.moderation-table thead tr:first-child th:last-child {
+  border-top-right-radius: 10px;
+}
+
+.moderation-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 10px;
+}
+
+.moderation-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 10px;
 }
 
 .moderation-table thead th {
-  color: #000;
-  font-size: clamp(1rem, 1.8vw, 24px);
-  font-family: 'Abril Fatface', serif;
-  font-weight: 400;
-  letter-spacing: 0.03em;
-  text-align: center;
+  color: var(--moderation-table-text-muted);
+  font-size: 0.6875rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
   vertical-align: bottom;
-  padding: 0 8px 12px;
-  border-bottom: 1px solid #000;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(to bottom, #fafafa, #f3f3f4);
+  border-bottom: 1px solid var(--moderation-table-border);
+}
+
+.moderation-table thead th:first-child {
+  padding-left: 1rem;
 }
 
 .moderation-table tbody td {
-  color: #000;
-  font-size: clamp(0.9rem, 1.5vw, 20px);
-  font-family: 'Abril Fatface', serif;
+  color: var(--moderation-table-text);
+  font-size: 0.9375rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
   font-weight: 400;
-  letter-spacing: 0.03em;
-  text-align: center;
+  letter-spacing: 0.01em;
+  text-align: left;
   vertical-align: middle;
-  padding: 16px 8px;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   word-break: break-word;
 }
 
-.moderation-table-col-preview {
-  width: 28%;
+.moderation-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
-.moderation-table-col-reason {
-  width: 24%;
+.moderation-table tbody tr:hover td {
+  background: rgba(145, 0, 41, 0.03);
 }
 
-.moderation-table-col-score {
-  width: 22%;
+.moderation-cell-preview {
+  color: var(--moderation-table-text);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
-.moderation-table-col-actions {
-  width: 18%;
+.moderation-cell-product {
+  color: var(--moderation-table-text);
+  font-size: 0.875rem;
+  line-height: 1.4;
 }
 
-.moderation-table-actions-cell {
+.moderation-cell-collab,
+.moderation-cell-likes {
+  color: var(--moderation-table-text-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+.moderation-cell-score {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* AI toxicity %: 0–30 yeşil, 31–69 turuncu, 70–100 kırmızı (🟢🟠🔴 + metin rengi) */
+.moderation-cell-score--low {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.moderation-cell-score--mid {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.moderation-cell-score--high {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.moderation-table-actions-cell {
+  vertical-align: top;
+  min-width: 7.25rem;
+}
+
+.moderation-action-group {
+  display: inline-flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
 .moderation-action-btn {
-  margin: 0 4px;
-  padding: 4px 8px;
-  border: none;
-  background: transparent;
-  font-size: inherit;
-  font-family: inherit;
-  line-height: 1;
+  white-space: nowrap;
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--moderation-table-border);
+  background: var(--moderation-table-surface);
+  color: var(--moderation-table-text);
+  font-size: 0.8125rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
   cursor: pointer;
-  border-radius: 4px;
-  vertical-align: middle;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .moderation-action-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(145, 0, 41, 0.06);
+  border-color: rgba(145, 0, 41, 0.22);
 }
 
 .moderation-action-btn:disabled {
@@ -86,10 +200,65 @@
   cursor: not-allowed;
 }
 
+.moderation-action-btn--approve {
+  border-color: rgba(22, 120, 70, 0.35);
+  color: #166534;
+  background: rgba(22, 120, 70, 0.06);
+}
+
+.moderation-action-btn--approve:hover:not(:disabled) {
+  background: rgba(22, 120, 70, 0.12);
+  border-color: rgba(22, 120, 70, 0.45);
+}
+
+.moderation-action-btn--reject {
+  border-color: rgba(180, 35, 35, 0.3);
+  color: #9f1239;
+  background: rgba(180, 35, 35, 0.06);
+}
+
+.moderation-action-btn--reject:hover:not(:disabled) {
+  background: rgba(180, 35, 35, 0.1);
+  border-color: rgba(180, 35, 35, 0.4);
+}
+
+.moderation-table-col-preview {
+  width: 30%;
+}
+
+.moderation-table-col-product {
+  width: 22%;
+}
+
+.moderation-table-col-collab {
+  width: 12%;
+}
+
+.moderation-table-col-likes {
+  width: 10%;
+}
+
+.moderation-table-col-score {
+  width: 14%;
+}
+
+.moderation-table-col-actions {
+  width: 12%;
+}
+
+.moderation-table thead th:last-child,
+.moderation-table tbody td:last-child {
+  text-align: right;
+}
+
 @media (max-width: 768px) {
+  .moderation-table-scroll {
+    padding: 0.75rem;
+  }
+
   .moderation-table thead th,
   .moderation-table tbody td {
-    padding-left: 4px;
-    padding-right: 4px;
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
   }
 }

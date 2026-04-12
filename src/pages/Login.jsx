@@ -50,11 +50,19 @@ const Login = () => {
 
   return (
     <div className="login-container">
-      <div className="login-center">
-        <header className="login-header">
-          <h1 className="login-title-main">FAVO Admin Portal</h1>
-          <p className="login-title-sub">Please log in to your account</p>
-        </header>
+      <div className="login-panel" role="main">
+        <div className="login-brand">
+          <img
+            className="login-logo"
+            src={loginLogo}
+            alt="Favo"
+            decoding="async"
+          />
+          <header className="login-header">
+            <h1 className="login-title-main">FAVO Admin Portal</h1>
+            <p className="login-title-sub">Please log in to your account</p>
+          </header>
+        </div>
 
         <form className="login-card" onSubmit={handleSubmit} noValidate>
           {displayError ? (
@@ -72,7 +80,7 @@ const Login = () => {
               className="input-box"
               type="email"
               autoComplete="username"
-              placeholder="Enter your email..."
+              placeholder="you@company.com"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
@@ -92,7 +100,7 @@ const Login = () => {
               className="input-box"
               type="password"
               autoComplete="current-password"
-              placeholder="******"
+              placeholder="••••••••"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
@@ -108,8 +116,6 @@ const Login = () => {
           </button>
         </form>
       </div>
-
-      <img className="login-logo" src={loginLogo} alt="Favo Logo" />
     </div>
   );
 };

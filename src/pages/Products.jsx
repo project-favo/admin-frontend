@@ -1,9 +1,11 @@
 import '../styles/Products.css';
 import ProductTable from '../components/ProductTable';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import TablePagination from '../components/TablePagination';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildProductUpdateBody,
   deleteProduct,
+  fetchAllAdminProducts,
   getAdminProduct,
   listAdminProducts,
   messageFromFailedResponse,
@@ -11,6 +13,8 @@ import {
   patchAdminProductDeactivate,
   putProduct,
 } from '../api/adminApi';
+import { downloadProductsPdf } from '../utils/productsPdfExport';
+import { getTablePageSize } from '../utils/adminPreferences';
 import loadingDots from '../assets/loading-dots.svg';
 
 function formatInteger(value) {
@@ -31,30 +35,21 @@ function toCategoryLabel(product) {
   return name ? String(name) : '—';
 }
 
-function toStatusLabel(product) {
+/** @returns {'active' | 'inactive' | 'unknown'} */
+function toProductStatusKind(product) {
   const active = product?.isActive ?? product?.active ?? product?.is_active;
-  if (active === true) return '🟢 Active';
-  if (active === false) return '🔴 Inactive';
+  if (active === true || active === 'true' || active === 1) return 'active';
+  if (active === false || active === 'false' || active === 0) return 'inactive';
+  return 'unknown';
+}
+
+function statusLabelFromProductKind(kind) {
+  if (kind === 'active') return 'Active';
+  if (kind === 'inactive') return 'Inactive';
   return '—';
 }
 
-function scrollToProductsTop() {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function getVisiblePages({ page, totalPages, maxButtons = 3 }) {
-  if (typeof totalPages !== 'number' || !Number.isFinite(totalPages) || totalPages <= 0) {
-    return [page];
-  }
-  const safeMax = Math.max(1, Math.floor(maxButtons));
-  const last = totalPages - 1;
-  let start = Math.max(0, page - Math.floor(safeMax / 2));
-  let end = Math.min(last, start + safeMax - 1);
-  start = Math.max(0, end - safeMax + 1);
-  const pages = [];
-  for (let p = start; p <= end; p += 1) pages.push(p);
-  return pages;
-}
+const PRODUCTS_POLL_MS = 5000;
 
 function mapProductDtoToRow(p, page, idx) {
   const idRaw = p?.id ?? `${page}-${idx}`;
@@ -63,11 +58,13 @@ function mapProductDtoToRow(p, page, idx) {
   if (raw === true || raw === 'true' || raw === 1) active = true;
   else if (raw === false || raw === 'false' || raw === 0) active = false;
 
+  const statusKind = toProductStatusKind(p);
   return {
     id: String(idRaw),
     name: p?.name != null ? String(p.name) : '—',
     category: toCategoryLabel(p),
-    status: toStatusLabel(p),
+    statusKind,
+    statusLabel: statusLabelFromProductKind(statusKind),
     active,
   };
 }
@@ -78,20 +75,20 @@ function mapAdminProductsDtoToRows(dto, page) {
 }
 
 function readProductPageMeta(dto) {
-  return {
-    totalElements:
-      typeof dto?.totalElements === 'number'
-        ? dto.totalElements
-        : dto?.totalElements != null
-          ? Number(dto.totalElements)
-          : null,
-    totalPages:
-      typeof dto?.totalPages === 'number'
-        ? dto.totalPages
-        : dto?.totalPages != null
-          ? Number(dto.totalPages)
-          : null,
-  };
+  let totalElements = null;
+  let totalPages = null;
+  const te =
+    dto?.totalElements ?? dto?.total_elements ?? dto?.total ?? dto?.page?.totalElements;
+  if (te != null) {
+    const n = typeof te === 'number' ? te : Number(te);
+    if (Number.isFinite(n)) totalElements = n;
+  }
+  const tp = dto?.totalPages ?? dto?.total_pages ?? dto?.page?.totalPages;
+  if (tp != null) {
+    const n = typeof tp === 'number' ? tp : Number(tp);
+    if (Number.isFinite(n)) totalPages = n;
+  }
+  return { totalElements, totalPages };
 }
 
 function getProductImageUrl(product) {
@@ -192,7 +189,8 @@ function ProductViewImageSection({ product }) {
 
 const Products = () => {
   const [page, setPage] = useState(0);
-  const [size] = useState(15);
+  const [size] = useState(() => getTablePageSize());
+  const [filter, setFilter] = useState('all'); // 'all' | 'active'
   const [rows, setRows] = useState([]);
   const [totalElements, setTotalElements] = useState(null);
   const [totalPages, setTotalPages] = useState(null);
@@ -209,12 +207,19 @@ const Products = () => {
     (null)
   );
   const [editSaving, setEditSaving] = useState(false);
+  const [pollTick, setPollTick] = useState(0);
+  const pollSilentRef = useRef(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportFeedback, setExportFeedback] = useState(
+    /** @type {null | { ok: boolean, message: string }} */
+    (null)
+  );
 
   const refreshCurrentPage = useCallback(async () => {
     const res = await listAdminProducts({
       page,
       size,
-      activeOnly: false,
+      activeOnly: filter === 'active',
     });
     if (!res.ok) {
       throw new Error(`Request failed (${res.status})`);
@@ -224,48 +229,62 @@ const Products = () => {
     const meta = readProductPageMeta(dto);
     setTotalElements(meta.totalElements);
     setTotalPages(meta.totalPages);
-  }, [page, size]);
+  }, [page, size, filter]);
 
   useEffect(() => {
-    let alive = true;
+    const t = window.setInterval(() => {
+      pollSilentRef.current = true;
+      setPollTick((n) => n + 1);
+    }, PRODUCTS_POLL_MS);
+    return () => window.clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    scrollToProductsTop();
+    const silent = pollSilentRef.current;
+    pollSilentRef.current = false;
+
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+
     (async () => {
       try {
         const res = await listAdminProducts({
           page,
           size,
-          activeOnly: false,
+          activeOnly: filter === 'active',
           signal: controller.signal,
         });
+        if (cancelled) return;
         if (!res.ok) {
           throw new Error(`Request failed (${res.status})`);
         }
         const dto = await res.json();
-
-        if (!alive) return;
+        if (cancelled) return;
+        setError(null);
         setRows(mapAdminProductsDtoToRows(dto, page));
         const meta = readProductPageMeta(dto);
         setTotalElements(meta.totalElements);
         setTotalPages(meta.totalPages);
       } catch (e) {
-        if (!alive) return;
-        if (e?.name === 'AbortError') return;
+        if (cancelled) return;
+        if (e && typeof e === 'object' && 'name' in e && e.name === 'AbortError') return;
         setRows([]);
         setTotalElements(null);
         setTotalPages(null);
         setError(e instanceof Error ? e.message : 'Unknown error');
       } finally {
-        if (alive) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
-      alive = false;
+      cancelled = true;
       controller.abort();
     };
-  }, [page, size]);
+  }, [page, size, filter, pollTick]);
 
   const handleView = async (id) => {
     setViewModal({ status: 'loading' });
@@ -378,244 +397,344 @@ const Products = () => {
   };
 
   useEffect(() => {
-    if (totalPages == null || totalPages <= 0) return;
-    if (page > totalPages - 1) {
-      setPage(totalPages - 1);
+    if (loading) return;
+    if (typeof totalPages !== 'number' || !Number.isFinite(totalPages)) return;
+    if (totalPages <= 0) {
+      if (page > 0) setPage(0);
+      return;
     }
-  }, [totalPages, page]);
+    if (page >= totalPages) setPage(totalPages - 1);
+  }, [loading, page, totalPages]);
 
   const formattedTotal = useMemo(() => formatInteger(totalElements), [totalElements]);
-  const showingFrom =
-    totalElements == null ? 0 : page * size + (rows.length > 0 ? 1 : 0);
-  const showingTo = totalElements == null ? rows.length : page * size + rows.length;
+  const showingFrom = rows.length === 0 ? 0 : page * size + 1;
+  const showingTo = page * size + rows.length;
   const canPrev = page > 0 && !loading;
   const canNext =
     !loading &&
     (typeof totalPages === 'number' ? page + 1 < totalPages : rows.length === size);
-  const visiblePages = useMemo(
-    () => getVisiblePages({ page, totalPages, maxButtons: 3 }),
-    [page, totalPages]
-  );
+  const pageStatusText = useMemo(() => {
+    const tp =
+      typeof totalPages === 'number' && totalPages > 0 ? String(totalPages) : '—';
+    return `Page ${page + 1} of ${tp}`;
+  }, [page, totalPages]);
+
+  const goPrev = () => setPage((p) => Math.max(0, p - 1));
+  const goNext = () => setPage((p) => p + 1);
+
+  async function handleExportPdf() {
+    if (exporting) return;
+    setExportFeedback(null);
+    setExporting(true);
+    try {
+      const dtos = await fetchAllAdminProducts({
+        activeOnly: filter === 'active',
+      });
+      const rows = dtos.map((p, idx) => mapProductDtoToRow(p, 0, idx));
+      const filterLabel = filter === 'active' ? 'Active only' : 'All products';
+      downloadProductsPdf({
+        rows: rows.map(({ id, name, category, statusLabel }) => ({
+          id,
+          name,
+          category,
+          statusLabel,
+        })),
+        filterLabel,
+      });
+      setExportFeedback({ ok: true, message: 'PDF downloaded.' });
+    } catch (e) {
+      setExportFeedback({
+        ok: false,
+        message: e instanceof Error ? e.message : 'Export failed.',
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div className="products-page">
-      <h2 className="products-main-title">Product Catalog Management</h2>
+      <div className="products-page-inner">
+        <header className="products-header">
+          <h2 className="products-main-title">Product catalog</h2>
+          <p className="products-subtitle">
+            Browse listings, filter by availability, and edit, activate, or remove products.
+          </p>
+        </header>
 
-      <div className="products-toolbar" aria-label="Product list controls">
-        <div className="products-toolbar-count">
-          <span>
-            All Products (
-            {loading && formattedTotal == null ? 'Loading…' : formattedTotal ?? '—'})
-          </span>
-        </div>
-        <span className="products-toolbar-meta">Filter: All ⌄</span>
-        <span className="products-toolbar-meta">+ Add New</span>
-      </div>
-
-      {error && (
-        <div role="alert" style={{ margin: '12px 0' }}>
-          Failed to load products: {error}
-        </div>
-      )}
-
-      {actionError && (
-        <div role="alert" style={{ margin: '12px 0' }}>
-          Action failed: {actionError}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="products-loading" aria-live="polite" aria-busy="true">
-          <img src={loadingDots} alt="Loading" />
-          <div className="products-loading-text">Loading products…</div>
-        </div>
-      ) : (
-        <ProductTable
-          products={rows}
-          onView={handleView}
-          onEdit={openEdit}
-          onActivate={handleActivate}
-          onDeactivate={handleDeactivate}
-          onDelete={handleDelete}
-          actionBusyId={actionBusyId}
-        />
-      )}
-
-      {viewModal != null && (
-        <div
-          className="products-modal-backdrop"
-          role="presentation"
-          onClick={() => setViewModal(null)}
-        >
+        <div className="products-toolbar" aria-label="Product list controls">
           <div
-            className="products-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="products-view-title"
-            onClick={(e) => e.stopPropagation()}
+            className="products-total-pill"
+            title={
+              filter === 'active'
+                ? 'Total active listings'
+                : 'Total products (all statuses)'
+            }
           >
-            <h3 id="products-view-title">Product detail</h3>
-            {viewModal.status === 'loading' && (
-              <div className="products-modal-body">Loading…</div>
-            )}
-            {viewModal.status === 'err' && (
-              <div className="products-modal-body" role="alert">
-                {viewModal.message}
-              </div>
-            )}
-            {viewModal.status === 'ok' && (
-              <div className="products-modal-body">
-                <ProductViewImageSection product={viewModal.product} />
-                <dl>
-                  {formatProductDetail(viewModal.product).map(([k, v]) => (
-                    <Fragment key={k}>
-                      <dt>{k}</dt>
-                      <dd>{v}</dd>
-                    </Fragment>
-                  ))}
-                </dl>
-              </div>
-            )}
-            <div className="products-modal-actions">
-              <button type="button" onClick={() => setViewModal(null)}>
-                Close
-              </button>
-            </div>
+            <span className="products-total-pill-label">
+              {filter === 'active' ? 'Active' : 'All'} products
+            </span>
+            <span className="products-total-pill-value" aria-live="polite">
+              {loading && formattedTotal == null ? '…' : formattedTotal ?? '—'}
+            </span>
           </div>
-        </div>
-      )}
-
-      {editModal != null && (
-        <div
-          className="products-modal-backdrop"
-          role="presentation"
-          onClick={() => !editSaving && setEditModal(null)}
-        >
           <div
-            className="products-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="products-edit-title"
-            onClick={(e) => e.stopPropagation()}
+            className="products-filter-segment"
+            role="group"
+            aria-label="Filter by listing status"
           >
-            <h3 id="products-edit-title">Edit product</h3>
-            {editModal.status === 'loading' && (
-              <div className="products-modal-body">Loading…</div>
-            )}
-            {editModal.status === 'err' && (
-              <div className="products-modal-body" role="alert">
-                {editModal.message}
-              </div>
-            )}
-            {editModal.status === 'ok' && (
-              <div className="products-modal-body">
-                <div className="products-modal-field">
-                  <label htmlFor="product-edit-name">Name</label>
-                  <input
-                    id="product-edit-name"
-                    value={editModal.name}
-                    onChange={(e) => handleEditFieldChange('name', e.target.value)}
-                    disabled={editSaving}
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="products-modal-field">
-                  <label htmlFor="product-edit-desc">Description</label>
-                  <textarea
-                    id="product-edit-desc"
-                    value={editModal.description}
-                    onChange={(e) => handleEditFieldChange('description', e.target.value)}
-                    disabled={editSaving}
-                  />
-                </div>
-                <div className="products-modal-field">
-                  <label htmlFor="product-edit-img">Image URL</label>
-                  <input
-                    id="product-edit-img"
-                    value={editModal.imageURL}
-                    onChange={(e) => handleEditFieldChange('imageURL', e.target.value)}
-                    disabled={editSaving}
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="products-modal-field">
-                  <label htmlFor="product-edit-tag">Leaf tag ID</label>
-                  <input
-                    id="product-edit-tag"
-                    value={editModal.tagId}
-                    onChange={(e) => handleEditFieldChange('tagId', e.target.value)}
-                    disabled={editSaving}
-                    inputMode="numeric"
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
-            )}
-            <div className="products-modal-actions">
-              <button
-                type="button"
-                disabled={editSaving}
-                onClick={() => setEditModal(null)}
-              >
-                Cancel
-              </button>
-              {editModal.status === 'ok' && (
-                <button type="button" disabled={editSaving} onClick={handleEditSave}>
-                  {editSaving ? 'Saving…' : 'Save'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <footer className="products-footer">
-        <p className="products-footer-summary">
-          Showing {showingFrom}-{showingTo} of{' '}
-          {loading && formattedTotal == null ? 'Loading…' : formattedTotal ?? '—'} products
-        </p>
-        <nav className="products-pagination" aria-label="Pagination">
-          <button
-            type="button"
-            disabled={!canPrev}
-            onClick={() => {
-              scrollToProductsTop();
-              setPage((p) => Math.max(0, p - 1));
-            }}
-          >
-            &lt; Prev
-          </button>
-          {visiblePages.map((p) => (
             <button
-              key={p}
               type="button"
               className={
-                p === page
-                  ? 'products-pagination-page products-pagination-page--active'
-                  : 'products-pagination-page'
+                filter === 'all'
+                  ? 'products-filter-segment-btn products-filter-segment-btn--active'
+                  : 'products-filter-segment-btn'
               }
-              aria-current={p === page ? 'page' : undefined}
-              disabled={loading}
               onClick={() => {
-                scrollToProductsTop();
-                setPage(p);
+                if (filter === 'all') return;
+                setPage(0);
+                setFilter('all');
               }}
+              disabled={loading}
             >
-              {p + 1}
+              All
             </button>
-          ))}
+            <button
+              type="button"
+              className={
+                filter === 'active'
+                  ? 'products-filter-segment-btn products-filter-segment-btn--active'
+                  : 'products-filter-segment-btn'
+              }
+              onClick={() => {
+                if (filter === 'active') return;
+                setPage(0);
+                setFilter('active');
+              }}
+              disabled={loading}
+            >
+              Active only
+            </button>
+          </div>
           <button
             type="button"
-            disabled={!canNext}
-            onClick={() => {
-              scrollToProductsTop();
-              setPage((p) => p + 1);
-            }}
+            className="products-toolbar-export"
+            title="Download PDF of all products matching the current filter"
+            onClick={handleExportPdf}
+            disabled={loading || exporting}
           >
-            Next &gt;
+            {exporting ? 'Exporting…' : 'Export'}
           </button>
-        </nav>
-      </footer>
+        </div>
+
+        {error && (
+          <div className="products-alert products-alert--error" role="alert">
+            Failed to load products: {error}
+          </div>
+        )}
+
+        {actionError && (
+          <div className="products-alert products-alert--error" role="alert">
+            Action failed: {actionError}
+          </div>
+        )}
+
+        {exportFeedback && (
+          <div
+            className={
+              exportFeedback.ok
+                ? 'products-alert products-alert--success'
+                : 'products-alert products-alert--error'
+            }
+            role="status"
+          >
+            {exportFeedback.message}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="products-loading" aria-live="polite" aria-busy="true">
+            <img src={loadingDots} alt="" />
+            <div className="products-loading-text">Loading products…</div>
+          </div>
+        ) : !error && rows.length === 0 ? (
+          <div className="products-empty" role="status">
+            <p className="products-empty-title">No products to show</p>
+            <p className="products-empty-hint">
+              {filter === 'active'
+                ? 'There are no active listings matching this filter.'
+                : 'No product records were returned for this page.'}
+            </p>
+          </div>
+        ) : !error ? (
+          <>
+            <div className="products-pagination-bar products-pagination-bar--top">
+              <TablePagination
+                ariaLabel="Product list pages (top)"
+                statusText={pageStatusText}
+                canPrev={canPrev}
+                canNext={canNext}
+                onPrev={goPrev}
+                onNext={goNext}
+              />
+            </div>
+            <ProductTable
+              products={rows}
+              onView={handleView}
+              onEdit={openEdit}
+              onActivate={handleActivate}
+              onDeactivate={handleDeactivate}
+              onDelete={handleDelete}
+              actionBusyId={actionBusyId}
+            />
+          </>
+        ) : null}
+
+        <footer className="products-footer">
+          <p className="products-footer-summary">
+            Showing {showingFrom}-{showingTo} of{' '}
+            {loading && formattedTotal == null ? '…' : formattedTotal ?? '—'} products
+          </p>
+          <div className="products-pagination-bar products-pagination-bar--bottom">
+            <TablePagination
+              ariaLabel="Product list pages (bottom)"
+              statusText={pageStatusText}
+              canPrev={canPrev}
+              canNext={canNext}
+              onPrev={goPrev}
+              onNext={goNext}
+            />
+          </div>
+        </footer>
+
+        {viewModal != null && (
+          <div
+            className="products-modal-backdrop"
+            role="presentation"
+            onClick={() => setViewModal(null)}
+          >
+            <div
+              className="products-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="products-view-title"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 id="products-view-title">Product detail</h3>
+              {viewModal.status === 'loading' && (
+                <div className="products-modal-body">Loading…</div>
+              )}
+              {viewModal.status === 'err' && (
+                <div className="products-modal-body" role="alert">
+                  {viewModal.message}
+                </div>
+              )}
+              {viewModal.status === 'ok' && (
+                <div className="products-modal-body">
+                  <ProductViewImageSection product={viewModal.product} />
+                  <dl>
+                    {formatProductDetail(viewModal.product).map(([k, v]) => (
+                      <Fragment key={k}>
+                        <dt>{k}</dt>
+                        <dd>{v}</dd>
+                      </Fragment>
+                    ))}
+                  </dl>
+                </div>
+              )}
+              <div className="products-modal-actions">
+                <button type="button" onClick={() => setViewModal(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editModal != null && (
+          <div
+            className="products-modal-backdrop"
+            role="presentation"
+            onClick={() => !editSaving && setEditModal(null)}
+          >
+            <div
+              className="products-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="products-edit-title"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 id="products-edit-title">Edit product</h3>
+              {editModal.status === 'loading' && (
+                <div className="products-modal-body">Loading…</div>
+              )}
+              {editModal.status === 'err' && (
+                <div className="products-modal-body" role="alert">
+                  {editModal.message}
+                </div>
+              )}
+              {editModal.status === 'ok' && (
+                <div className="products-modal-body">
+                  <div className="products-modal-field">
+                    <label htmlFor="product-edit-name">Name</label>
+                    <input
+                      id="product-edit-name"
+                      value={editModal.name}
+                      onChange={(e) => handleEditFieldChange('name', e.target.value)}
+                      disabled={editSaving}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="products-modal-field">
+                    <label htmlFor="product-edit-desc">Description</label>
+                    <textarea
+                      id="product-edit-desc"
+                      value={editModal.description}
+                      onChange={(e) => handleEditFieldChange('description', e.target.value)}
+                      disabled={editSaving}
+                    />
+                  </div>
+                  <div className="products-modal-field">
+                    <label htmlFor="product-edit-img">Image URL</label>
+                    <input
+                      id="product-edit-img"
+                      value={editModal.imageURL}
+                      onChange={(e) => handleEditFieldChange('imageURL', e.target.value)}
+                      disabled={editSaving}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="products-modal-field">
+                    <label htmlFor="product-edit-tag">Leaf tag ID</label>
+                    <input
+                      id="product-edit-tag"
+                      value={editModal.tagId}
+                      onChange={(e) => handleEditFieldChange('tagId', e.target.value)}
+                      disabled={editSaving}
+                      inputMode="numeric"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+              )}
+              <div className="products-modal-actions">
+                <button
+                  type="button"
+                  disabled={editSaving}
+                  onClick={() => setEditModal(null)}
+                >
+                  Cancel
+                </button>
+                {editModal.status === 'ok' && (
+                  <button type="button" disabled={editSaving} onClick={handleEditSave}>
+                    {editSaving ? 'Saving…' : 'Save'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

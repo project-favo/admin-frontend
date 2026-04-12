@@ -38,6 +38,14 @@ function parseSpringPageMeta(dto) {
   return { totalElements, totalPages };
 }
 
+/** @param {{ username: string, email: string, id: string }} row */
+function userRowMatchesQuery(row, qLower) {
+  if (!qLower) return true;
+  return [row.username, row.email, row.id].some((field) =>
+    String(field).toLowerCase().includes(qLower)
+  );
+}
+
 const USERS_POLL_MS = 5000;
 
 const Users = () => {
@@ -54,6 +62,10 @@ const Users = () => {
   const pollSilentRef = useRef(false);
   const [actionFeedback, setActionFeedback] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+
+  const searchTrim = useMemo(() => searchInput.trim().toLowerCase(), [searchInput]);
+  const isSearchActive = searchTrim.length > 0;
 
   /** @param {string} userId @param {'activate' | 'suspend'} action */
   async function handleUserAction(userId, action) {
@@ -94,6 +106,8 @@ const Users = () => {
     const controller = new AbortController();
     const silent = pollSilentRef.current;
     pollSilentRef.current = false;
+
+    if (isSearchActive) return;
 
     if (!silent) {
       setLoading(true);
@@ -144,7 +158,54 @@ const Users = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [filter, page, size, listRefreshKey, pollTick]);
+  }, [filter, page, size, listRefreshKey, pollTick, isSearchActive]);
+
+  useEffect(() => {
+    if (!isSearchActive) return;
+    let cancelled = false;
+    const controller = new AbortController();
+
+    setLoading(true);
+    setError(null);
+
+    (async () => {
+      try {
+        const dtos = await fetchAllAdminUsers({
+          activeOnly: filter === 'active',
+          inactiveOnly: false,
+          signal: controller.signal,
+        });
+        if (cancelled) return;
+        const allRows = dtos.map((u, idx) => mapAdminUserDtoToTableRow(u, idx, 0));
+        const filtered = allRows.filter((row) => userRowMatchesQuery(row, searchTrim));
+        const n = filtered.length;
+        const tp = n === 0 ? 0 : Math.ceil(n / size);
+        const slice = filtered.slice(page * size, page * size + size);
+        if (cancelled) return;
+        setError(null);
+        setUsers(slice);
+        setTotalElements(n);
+        setTotalPages(tp);
+      } catch (e) {
+        if (cancelled) return;
+        if (e && typeof e === 'object' && 'name' in e && e.name === 'AbortError') return;
+        setUsers([]);
+        setTotalElements(null);
+        setTotalPages(null);
+        setError(e instanceof Error ? e.message : 'Unknown error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filter, page, size, listRefreshKey, searchTrim, isSearchActive]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchTrim]);
 
   useEffect(() => {
     if (loading) return;
@@ -180,11 +241,15 @@ const Users = () => {
         activeOnly: filter === 'active',
         inactiveOnly: false,
       });
-      const rows = dtos.map((u, idx) => mapAdminUserDtoToTableRow(u, idx, 0));
+      let rows = dtos.map((u, idx) => mapAdminUserDtoToTableRow(u, idx, 0));
+      if (isSearchActive) {
+        rows = rows.filter((r) => userRowMatchesQuery(r, searchTrim));
+      }
       const filterLabel = filter === 'active' ? 'Active only' : 'All users';
+      const searchSuffix = isSearchActive ? ` · Search: "${searchInput.trim()}"` : '';
       downloadUsersPdf({
         rows: rows.map(({ username, email, statusLabel }) => ({ username, email, statusLabel })),
-        filterLabel,
+        filterLabel: `${filterLabel}${searchSuffix}`,
       });
       setActionFeedback({ ok: true, message: 'PDF downloaded.' });
     } catch (e) {
@@ -257,6 +322,17 @@ const Users = () => {
               Active only
             </button>
           </div>
+          <div className="users-toolbar-search">
+            <input
+              type="search"
+              className="users-toolbar-search-input"
+              placeholder="Search by username, email, ID…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              aria-label="Search users"
+              autoComplete="off"
+            />
+          </div>
           <button
             type="button"
             className="users-toolbar-export"
@@ -294,9 +370,11 @@ const Users = () => {
           <div className="users-empty" role="status">
             <p className="users-empty-title">No users to show</p>
             <p className="users-empty-hint">
-              {filter === 'active'
-                ? 'There are no active users matching this filter.'
-                : 'No user records were returned for this page.'}
+              {isSearchActive
+                ? 'No users match this search. Try different keywords.'
+                : filter === 'active'
+                  ? 'There are no active users matching this filter.'
+                  : 'No user records were returned for this page.'}
             </p>
           </div>
         ) : !error ? (

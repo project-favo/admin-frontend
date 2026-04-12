@@ -72,6 +72,38 @@
   margin-bottom: 1.25rem;
 }
 
+.moderation-toolbar-search {
+  flex: 1;
+  min-width: min(100%, 12rem);
+  max-width: 22rem;
+}
+
+.moderation-toolbar-search-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--moderation-border);
+  background: var(--moderation-surface);
+  color: var(--moderation-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.875rem;
+}
+
+.moderation-toolbar-search-input::placeholder {
+  color: var(--moderation-text-muted);
+}
+
+.moderation-toolbar-search-input:focus {
+  outline: none;
+  border-color: var(--moderation-accent);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.06);
+}
+
 .moderation-total-pill {
   display: inline-flex;
   flex-direction: column;

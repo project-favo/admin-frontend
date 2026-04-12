@@ -74,6 +74,14 @@ function mapAdminProductsDtoToRows(dto, page) {
   return content.map((p, idx) => mapProductDtoToRow(p, page, idx));
 }
 
+/** @param {{ id: string, name: string, category: string, statusLabel: string }} row */
+function productRowMatchesQuery(row, qLower) {
+  if (!qLower) return true;
+  return [row.id, row.name, row.category, row.statusLabel].some((field) =>
+    String(field).toLowerCase().includes(qLower)
+  );
+}
+
 function readProductPageMeta(dto) {
   let totalElements = null;
   let totalPages = null;
@@ -214,8 +222,17 @@ const Products = () => {
     /** @type {null | { ok: boolean, message: string }} */
     (null)
   );
+  const [searchInput, setSearchInput] = useState('');
+  const [listRefreshKey, setListRefreshKey] = useState(0);
+
+  const searchTrim = useMemo(() => searchInput.trim().toLowerCase(), [searchInput]);
+  const isSearchActive = searchTrim.length > 0;
 
   const refreshCurrentPage = useCallback(async () => {
+    if (isSearchActive) {
+      setListRefreshKey((k) => k + 1);
+      return;
+    }
     const res = await listAdminProducts({
       page,
       size,
@@ -229,7 +246,7 @@ const Products = () => {
     const meta = readProductPageMeta(dto);
     setTotalElements(meta.totalElements);
     setTotalPages(meta.totalPages);
-  }, [page, size, filter]);
+  }, [page, size, filter, isSearchActive]);
 
   useEffect(() => {
     const t = window.setInterval(() => {
@@ -244,6 +261,8 @@ const Products = () => {
     const controller = new AbortController();
     const silent = pollSilentRef.current;
     pollSilentRef.current = false;
+
+    if (isSearchActive) return;
 
     if (!silent) {
       setLoading(true);
@@ -284,7 +303,53 @@ const Products = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [page, size, filter, pollTick]);
+  }, [page, size, filter, pollTick, isSearchActive]);
+
+  useEffect(() => {
+    if (!isSearchActive) return;
+    let cancelled = false;
+    const controller = new AbortController();
+
+    setLoading(true);
+    setError(null);
+
+    (async () => {
+      try {
+        const dtos = await fetchAllAdminProducts({
+          activeOnly: filter === 'active',
+          signal: controller.signal,
+        });
+        if (cancelled) return;
+        const allRows = dtos.map((p, idx) => mapProductDtoToRow(p, 0, idx));
+        const filtered = allRows.filter((row) => productRowMatchesQuery(row, searchTrim));
+        const n = filtered.length;
+        const tp = n === 0 ? 0 : Math.ceil(n / size);
+        const slice = filtered.slice(page * size, page * size + size);
+        if (cancelled) return;
+        setError(null);
+        setRows(slice);
+        setTotalElements(n);
+        setTotalPages(tp);
+      } catch (e) {
+        if (cancelled) return;
+        if (e && typeof e === 'object' && 'name' in e && e.name === 'AbortError') return;
+        setRows([]);
+        setTotalElements(null);
+        setTotalPages(null);
+        setError(e instanceof Error ? e.message : 'Unknown error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [filter, page, size, listRefreshKey, searchTrim, isSearchActive]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchTrim]);
 
   const handleView = async (id) => {
     setViewModal({ status: 'loading' });
@@ -430,8 +495,12 @@ const Products = () => {
       const dtos = await fetchAllAdminProducts({
         activeOnly: filter === 'active',
       });
-      const rows = dtos.map((p, idx) => mapProductDtoToRow(p, 0, idx));
+      let rows = dtos.map((p, idx) => mapProductDtoToRow(p, 0, idx));
+      if (isSearchActive) {
+        rows = rows.filter((r) => productRowMatchesQuery(r, searchTrim));
+      }
       const filterLabel = filter === 'active' ? 'Active only' : 'All products';
+      const searchSuffix = isSearchActive ? ` · Search: "${searchInput.trim()}"` : '';
       downloadProductsPdf({
         rows: rows.map(({ id, name, category, statusLabel }) => ({
           id,
@@ -439,7 +508,7 @@ const Products = () => {
           category,
           statusLabel,
         })),
-        filterLabel,
+        filterLabel: `${filterLabel}${searchSuffix}`,
       });
       setExportFeedback({ ok: true, message: 'PDF downloaded.' });
     } catch (e) {
@@ -516,6 +585,17 @@ const Products = () => {
               Active only
             </button>
           </div>
+          <div className="products-toolbar-search">
+            <input
+              type="search"
+              className="products-toolbar-search-input"
+              placeholder="Search by name, ID, category…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              aria-label="Search products"
+              autoComplete="off"
+            />
+          </div>
           <button
             type="button"
             className="products-toolbar-export"
@@ -561,9 +641,11 @@ const Products = () => {
           <div className="products-empty" role="status">
             <p className="products-empty-title">No products to show</p>
             <p className="products-empty-hint">
-              {filter === 'active'
-                ? 'There are no active listings matching this filter.'
-                : 'No product records were returned for this page.'}
+              {isSearchActive
+                ? 'No products match this search. Try different keywords.'
+                : filter === 'active'
+                  ? 'There are no active listings matching this filter.'
+                  : 'No product records were returned for this page.'}
             </p>
           </div>
         ) : !error ? (

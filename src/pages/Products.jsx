@@ -2,6 +2,7 @@ import '../styles/Products.css';
 import ProductTable from '../components/ProductTable';
 import TablePagination from '../components/TablePagination';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   buildProductUpdateBody,
   deleteProduct,
@@ -9,6 +10,7 @@ import {
   getAdminProduct,
   listAdminProducts,
   messageFromFailedResponse,
+  normalizeAdminPageDto,
   patchAdminProductActivate,
   patchAdminProductDeactivate,
   putProduct,
@@ -70,7 +72,7 @@ function mapProductDtoToRow(p, page, idx) {
 }
 
 function mapAdminProductsDtoToRows(dto, page) {
-  const content = Array.isArray(dto?.content) ? dto.content : [];
+  const { content } = normalizeAdminPageDto(dto);
   return content.map((p, idx) => mapProductDtoToRow(p, page, idx));
 }
 
@@ -83,20 +85,8 @@ function productRowMatchesQuery(row, qLower) {
 }
 
 function readProductPageMeta(dto) {
-  let totalElements = null;
-  let totalPages = null;
-  const te =
-    dto?.totalElements ?? dto?.total_elements ?? dto?.total ?? dto?.page?.totalElements;
-  if (te != null) {
-    const n = typeof te === 'number' ? te : Number(te);
-    if (Number.isFinite(n)) totalElements = n;
-  }
-  const tp = dto?.totalPages ?? dto?.total_pages ?? dto?.page?.totalPages;
-  if (tp != null) {
-    const n = typeof tp === 'number' ? tp : Number(tp);
-    if (Number.isFinite(n)) totalPages = n;
-  }
-  return { totalElements, totalPages };
+  const n = normalizeAdminPageDto(dto);
+  return { totalElements: n.totalElements, totalPages: n.totalPages };
 }
 
 function getProductImageUrl(product) {
@@ -196,6 +186,8 @@ function ProductViewImageSection({ product }) {
 }
 
 const Products = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [page, setPage] = useState(0);
   const [size] = useState(() => getTablePageSize());
   const [filter, setFilter] = useState('all'); // 'all' | 'active'
@@ -228,6 +220,55 @@ const Products = () => {
   const searchTrim = useMemo(() => searchInput.trim().toLowerCase(), [searchInput]);
   const isSearchActive = searchTrim.length > 0;
 
+  /** After creating a product: refetch list and open the page that contains the new row (often last page). */
+  useEffect(() => {
+    const st = location.state;
+    if (!st || typeof st !== 'object' || !st.refreshProducts) return;
+
+    const newId = st.newProductId;
+    navigate(location.pathname, { replace: true, state: {} });
+
+    setSearchInput('');
+    setFilter('all');
+    setPollTick((n) => n + 1);
+    setListRefreshKey((k) => k + 1);
+
+    if (newId == null) {
+      setPage(0);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await listAdminProducts({
+          page: 0,
+          size,
+          activeOnly: false,
+        });
+        if (cancelled || !res.ok) return;
+        const dto = await res.json();
+        const { content } = normalizeAdminPageDto(dto);
+        if (content.some((p) => String(p?.id) === String(newId))) {
+          setPage(0);
+          return;
+        }
+        const meta = readProductPageMeta(dto);
+        const tp = meta.totalPages;
+        if (typeof tp === 'number' && Number.isFinite(tp) && tp > 1) {
+          setPage(tp - 1);
+        } else {
+          setPage(0);
+        }
+      } catch {
+        setPage(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, location.state, navigate, size]);
+
   const refreshCurrentPage = useCallback(async () => {
     if (isSearchActive) {
       setListRefreshKey((k) => k + 1);
@@ -254,6 +295,17 @@ const Products = () => {
       setPollTick((n) => n + 1);
     }, PRODUCTS_POLL_MS);
     return () => window.clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        pollSilentRef.current = true;
+        setPollTick((n) => n + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
 
   useEffect(() => {
@@ -486,6 +538,9 @@ const Products = () => {
 
   const goPrev = () => setPage((p) => Math.max(0, p - 1));
   const goNext = () => setPage((p) => p + 1);
+  const goToNewestPage = () => {
+    if (typeof totalPages === 'number' && totalPages > 0) setPage(totalPages - 1);
+  };
 
   async function handleExportPdf() {
     if (exporting) return;
@@ -596,15 +651,33 @@ const Products = () => {
               autoComplete="off"
             />
           </div>
-          <button
-            type="button"
-            className="products-toolbar-export"
-            title="Download PDF of all products matching the current filter"
-            onClick={handleExportPdf}
-            disabled={loading || exporting}
-          >
-            {exporting ? 'Exporting…' : 'Export'}
-          </button>
+          <div className="products-toolbar-actions">
+            <button
+              type="button"
+              className="products-toolbar-newest"
+              title="Jump to the last page (newest products by ID)"
+              onClick={goToNewestPage}
+              disabled={loading || typeof totalPages !== 'number' || totalPages <= 1}
+            >
+              Newest
+            </button>
+            <button
+              type="button"
+              className="products-toolbar-add"
+              onClick={() => navigate('/products/new')}
+            >
+              Add product
+            </button>
+            <button
+              type="button"
+              className="products-toolbar-export"
+              title="Download PDF of all products matching the current filter"
+              onClick={handleExportPdf}
+              disabled={loading || exporting}
+            >
+              {exporting ? 'Exporting…' : 'Export'}
+            </button>
+          </div>
         </div>
 
         {error && (

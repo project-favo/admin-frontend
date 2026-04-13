@@ -189,8 +189,65 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-.products-toolbar-export {
+.products-toolbar-actions {
   margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.products-toolbar-newest {
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--products-border);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--products-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.products-toolbar-newest:hover:not(:disabled) {
+  border-color: var(--products-accent);
+  color: var(--products-accent);
+}
+
+.products-toolbar-newest:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.products-toolbar-add {
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--products-accent);
+  background: var(--products-accent);
+  color: #fff;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.products-toolbar-add:hover {
+  filter: brightness(1.06);
+}
+
+.products-toolbar-export {
   padding: 0.35rem 0.65rem;
   border-radius: 8px;
   border: 1px solid var(--products-border);
@@ -522,4 +579,395 @@
 
 .products-modal-image-link:hover {
   text-decoration: underline;
+}
+
+.products-add-back {
+  margin: 0 0 0.75rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.875rem;
+}
+
+.products-add-back a {
+  color: var(--products-accent);
+  text-decoration: none;
+}
+
+.products-add-back a:hover {
+  text-decoration: underline;
+}
+
+.products-add-code {
+  font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--products-surface-muted);
+  border: 1px solid var(--products-border);
+}
+
+.products-add-card {
+  max-width: 28rem;
+  padding: 1.25rem 1.35rem;
+  border-radius: 12px;
+  border: 1px solid var(--products-border);
+  background: var(--products-surface);
+  box-shadow: var(--products-shadow);
+}
+
+.products-add-card--wide {
+  max-width: min(40rem, 100%);
+}
+
+.products-add-em {
+  font-style: italic;
+  color: var(--products-text);
+}
+
+.products-category-section-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--products-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.products-category-picker {
+  margin-top: 0.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 10px;
+  border: 1px solid var(--products-border);
+  background: var(--products-surface-muted);
+}
+
+.products-category-bc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.35rem;
+  margin: 0 0 0.75rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.8125rem;
+}
+
+.products-category-bc-item {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--products-accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.products-category-bc-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.products-category-bc-sep {
+  color: var(--products-text-muted);
+}
+
+.products-category-list-wrap {
+  min-height: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.products-category-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid var(--products-border);
+  background: var(--products-surface);
+}
+
+.products-category-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--products-border);
+  background: var(--products-surface);
+  text-align: left;
+  cursor: pointer;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.9rem;
+  color: var(--products-text);
+}
+
+.products-category-row:last-child {
+  border-bottom: none;
+}
+
+.products-category-row:hover:not(:disabled) {
+  background: rgba(145, 0, 41, 0.06);
+}
+
+.products-category-row:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.products-category-row-name {
+  font-weight: 600;
+}
+
+.products-category-row-path {
+  font-size: 0.78rem;
+  color: var(--products-text-muted);
+  word-break: break-word;
+}
+
+.products-category-hint {
+  margin: 0.35rem 0 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.8125rem;
+  color: var(--products-text-muted);
+  line-height: 1.4;
+}
+
+.products-category-search-results {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid var(--products-border);
+  background: var(--products-surface);
+}
+
+.products-category-search-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.45rem 0.65rem;
+  border: none;
+  border-bottom: 1px solid var(--products-border);
+  background: var(--products-surface);
+  text-align: left;
+  cursor: pointer;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.85rem;
+}
+
+.products-category-search-hit:last-child {
+  border-bottom: none;
+}
+
+.products-category-search-hit:hover:not(:disabled) {
+  background: rgba(145, 0, 41, 0.06);
+}
+
+.products-category-search-name {
+  font-weight: 600;
+  color: var(--products-text);
+}
+
+.products-category-search-path {
+  font-size: 0.75rem;
+  color: var(--products-text-muted);
+  word-break: break-word;
+}
+
+.products-category-inline-err {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(180, 35, 35, 0.08);
+  border: 1px solid rgba(180, 35, 35, 0.22);
+  color: #8b1530;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.85rem;
+}
+
+.products-category-selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(22, 120, 70, 0.35);
+  background: rgba(22, 120, 70, 0.06);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.875rem;
+}
+
+.products-category-selected-label {
+  font-weight: 600;
+  color: var(--products-text-muted);
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+}
+
+.products-category-selected-value {
+  flex: 1;
+  min-width: 0;
+  color: var(--products-text);
+  word-break: break-word;
+}
+
+.products-category-clear {
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--products-border);
+  background: var(--products-surface);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.products-category-clear:hover:not(:disabled) {
+  border-color: var(--products-accent);
+  color: var(--products-accent);
+}
+
+.products-category-new {
+  margin: 0;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--products-border);
+}
+
+.products-category-new-field {
+  margin-bottom: 0;
+}
+
+.products-category-new-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.products-category-new-row input {
+  flex: 1;
+  min-width: 10rem;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--products-border);
+  border-radius: 8px;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.9375rem;
+}
+
+.products-category-new-row button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--products-border);
+  background: var(--products-surface);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.products-category-new-row button:hover:not(:disabled) {
+  border-color: var(--products-accent);
+  color: var(--products-accent);
+}
+
+.products-category-new-row button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.products-add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--products-border);
+}
+
+.products-add-cancel {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.9rem;
+  color: var(--products-text-muted);
+  text-decoration: none;
+}
+
+.products-add-cancel:hover {
+  color: var(--products-accent);
+}
+
+.products-add-submit {
+  padding: 0.55rem 1.1rem;
+  border-radius: 10px;
+  border: 1px solid var(--products-accent);
+  background: var(--products-accent);
+  color: #fff;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.products-add-submit:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.products-add-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

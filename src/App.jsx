@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Products from './pages/Products';
+import AddProduct from './pages/AddProduct';
 import Moderation from './pages/Moderation';
 import Settings from './pages/Settings';
 
@@ -27,6 +28,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/users" element={<Users />} />
               <Route path="/products" element={<Products />} />
+              <Route path="/products/new" element={<AddProduct />} />
               <Route path="/moderation" element={<Moderation />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

@@ -1,7 +1,7 @@
 import '../styles/Products.css';
 import ProductTable from '../components/ProductTable';
 import TablePagination from '../components/TablePagination';
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   buildProductUpdateBody,
@@ -775,30 +775,47 @@ const Products = () => {
               aria-labelledby="products-view-title"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 id="products-view-title">Product detail</h3>
+              <div className="products-modal-header">
+                <h3 id="products-view-title">Product detail</h3>
+                {viewModal.status === 'ok' && viewModal.product?.name != null && (
+                  <p className="products-modal-subtitle">{String(viewModal.product.name)}</p>
+                )}
+              </div>
               {viewModal.status === 'loading' && (
-                <div className="products-modal-body">Loading…</div>
+                <div className="products-modal-body">
+                  <div className="products-modal-state products-modal-state--loading" role="status">
+                    Loading product…
+                  </div>
+                </div>
               )}
               {viewModal.status === 'err' && (
-                <div className="products-modal-body" role="alert">
-                  {viewModal.message}
+                <div className="products-modal-body">
+                  <div className="products-modal-state products-modal-state--error" role="alert">
+                    {viewModal.message}
+                  </div>
                 </div>
               )}
               {viewModal.status === 'ok' && (
                 <div className="products-modal-body">
-                  <ProductViewImageSection product={viewModal.product} />
-                  <dl>
-                    {formatProductDetail(viewModal.product).map(([k, v]) => (
-                      <Fragment key={k}>
-                        <dt>{k}</dt>
-                        <dd>{v}</dd>
-                      </Fragment>
-                    ))}
-                  </dl>
+                  <div className="products-modal-panel">
+                    <ProductViewImageSection product={viewModal.product} />
+                    <div className="products-modal-detail">
+                      {formatProductDetail(viewModal.product).map(([k, v]) => (
+                        <div key={k} className="products-modal-detail-row">
+                          <span className="products-modal-detail-key">{k}</span>
+                          <span className="products-modal-detail-val">{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
               <div className="products-modal-actions">
-                <button type="button" onClick={() => setViewModal(null)}>
+                <button
+                  type="button"
+                  className="products-modal-btn products-modal-btn--primary"
+                  onClick={() => setViewModal(null)}
+                >
                   Close
                 </button>
               </div>
@@ -813,76 +830,103 @@ const Products = () => {
             onClick={() => !editSaving && setEditModal(null)}
           >
             <div
-              className="products-modal"
+              className="products-modal products-modal--edit"
               role="dialog"
               aria-modal="true"
               aria-labelledby="products-edit-title"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 id="products-edit-title">Edit product</h3>
+              <div className="products-modal-header">
+                <h3 id="products-edit-title">Edit product</h3>
+                {editModal.status === 'ok' && (
+                  <p className="products-modal-subtitle">ID {editModal.id}</p>
+                )}
+              </div>
               {editModal.status === 'loading' && (
-                <div className="products-modal-body">Loading…</div>
+                <div className="products-modal-body">
+                  <div className="products-modal-state products-modal-state--loading" role="status">
+                    Loading product…
+                  </div>
+                </div>
               )}
               {editModal.status === 'err' && (
-                <div className="products-modal-body" role="alert">
-                  {editModal.message}
+                <div className="products-modal-body">
+                  <div className="products-modal-state products-modal-state--error" role="alert">
+                    {editModal.message}
+                  </div>
                 </div>
               )}
               {editModal.status === 'ok' && (
                 <div className="products-modal-body">
-                  <div className="products-modal-field">
-                    <label htmlFor="product-edit-name">Name</label>
-                    <input
-                      id="product-edit-name"
-                      value={editModal.name}
-                      onChange={(e) => handleEditFieldChange('name', e.target.value)}
-                      disabled={editSaving}
-                      autoComplete="off"
-                    />
-                  </div>
-                  <div className="products-modal-field">
-                    <label htmlFor="product-edit-desc">Description</label>
-                    <textarea
-                      id="product-edit-desc"
-                      value={editModal.description}
-                      onChange={(e) => handleEditFieldChange('description', e.target.value)}
-                      disabled={editSaving}
-                    />
-                  </div>
-                  <div className="products-modal-field">
-                    <label htmlFor="product-edit-img">Image URL</label>
-                    <input
-                      id="product-edit-img"
-                      value={editModal.imageURL}
-                      onChange={(e) => handleEditFieldChange('imageURL', e.target.value)}
-                      disabled={editSaving}
-                      autoComplete="off"
-                    />
-                  </div>
-                  <div className="products-modal-field">
-                    <label htmlFor="product-edit-tag">Leaf tag ID</label>
-                    <input
-                      id="product-edit-tag"
-                      value={editModal.tagId}
-                      onChange={(e) => handleEditFieldChange('tagId', e.target.value)}
-                      disabled={editSaving}
-                      inputMode="numeric"
-                      autoComplete="off"
-                    />
+                  <div className="products-modal-form-panel">
+                    <div className="products-modal-field">
+                      <label htmlFor="product-edit-name">Name</label>
+                      <input
+                        id="product-edit-name"
+                        value={editModal.name}
+                        onChange={(e) => handleEditFieldChange('name', e.target.value)}
+                        disabled={editSaving}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="products-modal-field">
+                      <label htmlFor="product-edit-desc">Description</label>
+                      <textarea
+                        id="product-edit-desc"
+                        value={editModal.description}
+                        onChange={(e) => handleEditFieldChange('description', e.target.value)}
+                        disabled={editSaving}
+                      />
+                    </div>
+                    <div className="products-modal-field">
+                      <label htmlFor="product-edit-img">Image URL</label>
+                      <input
+                        id="product-edit-img"
+                        value={editModal.imageURL}
+                        onChange={(e) => handleEditFieldChange('imageURL', e.target.value)}
+                        disabled={editSaving}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="products-modal-field products-modal-field--last">
+                      <label htmlFor="product-edit-tag">Leaf tag ID</label>
+                      <input
+                        id="product-edit-tag"
+                        className="products-modal-input-readonly"
+                        value={editModal.tagId}
+                        readOnly
+                        aria-readonly="true"
+                        aria-describedby="product-edit-tag-hint"
+                        title="Category (leaf tag) cannot be changed when editing"
+                        disabled={editSaving}
+                        inputMode="numeric"
+                        autoComplete="off"
+                      />
+                      <p className="products-modal-field-hint" id="product-edit-tag-hint">
+                        Category is fixed for this listing. To use another category, add a new
+                        product.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
               <div className="products-modal-actions">
                 <button
                   type="button"
+                  className="products-modal-btn products-modal-btn--secondary"
                   disabled={editSaving}
                   onClick={() => setEditModal(null)}
                 >
                   Cancel
                 </button>
                 {editModal.status === 'ok' && (
-                  <button type="button" disabled={editSaving} onClick={handleEditSave}>
-                    {editSaving ? 'Saving…' : 'Save'}
+                  <button
+                    type="button"
+                    className="products-modal-btn products-modal-btn--primary"
+                    disabled={editSaving}
+                    onClick={handleEditSave}
+                  >
+                    {editSaving ? 'Saving…' : 'Save changes'}
                   </button>
                 )}
               </div>

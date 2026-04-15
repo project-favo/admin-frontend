@@ -29,7 +29,6 @@ function initialsFromProductName(name) {
  *   onEdit: (id: string) => void;
  *   onActivate: (id: string) => void;
  *   onDeactivate: (id: string) => void;
- *   onDelete: (id: string) => void;
  *   actionBusyId: string | null;
  * }} props
  */
@@ -39,7 +38,6 @@ const ProductTable = ({
   onEdit,
   onActivate,
   onDeactivate,
-  onDelete,
   actionBusyId,
 }) => {
   const menuIdPrefix = useId();
@@ -189,15 +187,6 @@ const ProductTable = ({
                                 Activate
                               </button>
                             )}
-                            <button
-                              type="button"
-                              className="products-actions-item products-actions-item--danger"
-                              role="menuitem"
-                              disabled={busy}
-                              onClick={() => runAndClose(() => onDelete(id))}
-                            >
-                              Delete
-                            </button>
                           </div>
                         </AdminFloatingMenu>
                       ) : null}

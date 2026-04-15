@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   buildProductUpdateBody,
-  deleteProduct,
   fetchAllAdminProducts,
   getAdminProduct,
   listAdminProducts,
@@ -505,14 +504,6 @@ const Products = () => {
   const handleActivate = (id) => runProductAction(id, patchAdminProductActivate);
   const handleDeactivate = (id) => runProductAction(id, patchAdminProductDeactivate);
 
-  const handleDelete = async (id) => {
-    const ok = window.confirm(
-      'Delete this product? This soft-deletes the product and related reviews (per server rules).'
-    );
-    if (!ok) return;
-    await runProductAction(id, deleteProduct);
-  };
-
   useEffect(() => {
     if (loading) return;
     if (typeof totalPages !== 'number' || !Number.isFinite(totalPages)) return;
@@ -582,7 +573,7 @@ const Products = () => {
         <header className="products-header">
           <h2 className="products-main-title">Product catalog</h2>
           <p className="products-subtitle">
-            Browse listings, filter by availability, and edit, activate, or remove products.
+            Browse listings, filter by availability, and edit or change product availability.
           </p>
         </header>
 
@@ -739,7 +730,6 @@ const Products = () => {
               onEdit={openEdit}
               onActivate={handleActivate}
               onDeactivate={handleDeactivate}
-              onDelete={handleDelete}
               actionBusyId={actionBusyId}
             />
           </>

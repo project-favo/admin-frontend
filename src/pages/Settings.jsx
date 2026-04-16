@@ -19,6 +19,13 @@ import pkg from '../../package.json';
 
 const CLIENT_SETTINGS_KEY = 'favo.admin.clientSettings.v1';
 
+const AUTO_REJECT_OPTIONS = ['30', '50', '70'];
+
+function normalizeAutoRejectThreshold(raw) {
+  const s = raw != null ? String(raw).trim() : '';
+  return AUTO_REJECT_OPTIONS.includes(s) ? s : '50';
+}
+
 function loadClientSettings() {
   try {
     const raw = localStorage.getItem(CLIENT_SETTINGS_KEY);
@@ -92,7 +99,9 @@ const Settings = () => {
   const { logout } = useAuth();
   const saved = loadClientSettings();
   const [spamSensitivity, setSpamSensitivity] = useState(saved?.spamSensitivity ?? 'high');
-  const [autoRejectThreshold, setAutoRejectThreshold] = useState(saved?.autoRejectThreshold ?? '95');
+  const [autoRejectThreshold, setAutoRejectThreshold] = useState(() =>
+    normalizeAutoRejectThreshold(saved?.autoRejectThreshold)
+  );
   const [dataRetention, setDataRetention] = useState(saved?.dataRetentionMonths ?? '36');
   const [tablePageSize, setTablePageSizeState] = useState(() => getTablePageSize());
 
@@ -302,7 +311,8 @@ const Settings = () => {
         <div className="settings-grid settings-grid--pair">
             <SettingsCard title="AI moderation">
               <p className="settings-hint">
-                These preferences are stored in this browser until the API provides system settings.
+                These preferences are stored in this browser only. They are not sent to the API yet
+                and do not change live moderation behavior on the server.
               </p>
               <SettingRow label="Spam filter sensitivity">
                 <select
@@ -323,10 +333,9 @@ const Settings = () => {
                   value={autoRejectThreshold}
                   onChange={(e) => setAutoRejectThreshold(e.target.value)}
                 >
-                  <option value="80">80%</option>
-                  <option value="85">85%</option>
-                  <option value="90">90%</option>
-                  <option value="95">95%</option>
+                  <option value="30">30%</option>
+                  <option value="50">50%</option>
+                  <option value="70">70%</option>
                 </select>
               </SettingRow>
               <div className="settings-actions">

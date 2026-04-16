@@ -13,9 +13,9 @@
 
 .products-page-inner {
   width: 100%;
-  max-width: min(56rem, 100%);
+  max-width: min(72rem, 100%);
   margin: 0 auto;
-  padding: 0 0.25rem;
+  padding: 0 0.5rem;
   box-sizing: border-box;
 }
 

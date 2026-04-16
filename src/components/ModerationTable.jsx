@@ -40,7 +40,7 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
               <th scope="col">Product</th>
               <th scope="col">Collaborative</th>
               <th scope="col">Likes</th>
-              <th scope="col">AI Score</th>
+              <th scope="col">AI Toxicity</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>

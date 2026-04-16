@@ -6,7 +6,7 @@
   --products-table-text: #1a1a1a;
   --products-table-text-muted: #5c5c5c;
   width: 100%;
-  max-width: min(56rem, 100%);
+  max-width: min(72rem, 100%);
   padding: 0;
   background: transparent;
   border-radius: 0;

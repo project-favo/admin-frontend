@@ -4,6 +4,7 @@ import '../styles/ModerationTable.css';
  * @typedef {Object} ModerationTableRow
  * @property {string} id
  * @property {boolean} [hasNumericId]
+ * @property {'published'|'rejected'|'auto_rejected'} moderationStatusKind
  * @property {string} contentPreview
  * @property {string} productLabel
  * @property {string} collaborativeLabel
@@ -32,6 +33,7 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
             <col className="moderation-table-col-collab" />
             <col className="moderation-table-col-likes" />
             <col className="moderation-table-col-score" />
+            <col className="moderation-table-col-status" />
             <col className="moderation-table-col-actions" />
           </colgroup>
           <thead>
@@ -41,6 +43,7 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
               <th scope="col">Collaborative</th>
               <th scope="col">Likes</th>
               <th scope="col">AI Toxicity</th>
+              <th scope="col">Status</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
@@ -49,6 +52,7 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
               ({
                 id,
                 hasNumericId = true,
+                moderationStatusKind = 'published',
                 contentPreview,
                 productLabel,
                 collaborativeLabel,
@@ -58,13 +62,40 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
                 aiScoreTitle,
               }) => {
                 const rowBusy = actionBusyId === id;
-                const actionsDisabled = rowBusy || !hasNumericId;
                 const scoreClass =
                   aiScoreTone === 'low' || aiScoreTone === 'mid' || aiScoreTone === 'high'
                     ? `moderation-cell-score moderation-cell-score--${aiScoreTone}`
                     : 'moderation-cell-score';
+
+                const approveDisabled =
+                  rowBusy ||
+                  !hasNumericId ||
+                  moderationStatusKind === 'published' ||
+                  moderationStatusKind === 'auto_rejected';
+                const rejectDisabled =
+                  rowBusy || !hasNumericId || moderationStatusKind !== 'published';
+
+                const rowClass =
+                  moderationStatusKind === 'published'
+                    ? undefined
+                    : 'moderation-table-row--inactive';
+
+                let statusLabel = 'Published';
+                let statusClass = 'moderation-status-pill moderation-status-pill--published';
+                /** @type {string | undefined} */
+                let statusHint;
+                if (moderationStatusKind === 'rejected') {
+                  statusLabel = 'Rejected';
+                  statusClass = 'moderation-status-pill moderation-status-pill--rejected';
+                } else if (moderationStatusKind === 'auto_rejected') {
+                  statusLabel = 'Rejected';
+                  statusClass = 'moderation-status-pill moderation-status-pill--rejected';
+                  statusHint =
+                    'Hidden automatically by AI toxicity threshold (System settings).';
+                }
+
                 return (
-                  <tr key={id}>
+                  <tr key={id} className={rowClass}>
                     <td className="moderation-cell-preview">{contentPreview}</td>
                     <td className="moderation-cell-product">{productLabel}</td>
                     <td className="moderation-cell-collab">{collaborativeLabel}</td>
@@ -72,13 +103,18 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
                     <td className={scoreClass} title={aiScoreTitle}>
                       {aiScore}
                     </td>
+                    <td className="moderation-cell-status">
+                      <span className={statusClass} title={statusHint}>
+                        {statusLabel}
+                      </span>
+                    </td>
                     <td className="moderation-table-actions-cell">
                       <div className="moderation-action-group">
                         <button
                           type="button"
                           className="moderation-action-btn moderation-action-btn--approve"
                           aria-label="Approve — publish review"
-                          disabled={actionsDisabled}
+                          disabled={approveDisabled}
                           onClick={() => onApprove(id)}
                         >
                           Approve
@@ -87,7 +123,7 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
                           type="button"
                           className="moderation-action-btn moderation-action-btn--reject"
                           aria-label="Reject — hide review"
-                          disabled={actionsDisabled}
+                          disabled={rejectDisabled}
                           onClick={() => onReject(id)}
                         >
                           Reject

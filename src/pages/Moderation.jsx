@@ -446,10 +446,10 @@ const Moderation = () => {
         scoreFilter === 'all'
           ? 'All reviews'
           : scoreFilter === 'low'
-            ? 'AI score: Low (0–30)'
+            ? 'AI toxicity: Low (0–30)'
             : scoreFilter === 'mid'
-              ? 'AI score: Mid (31–69)'
-              : 'AI score: High (70–100)';
+              ? 'AI toxicity: Mid (31–69)'
+              : 'AI toxicity: High (70–100)';
       const searchSuffix = isSearchActive ? ` · Search: "${searchInput.trim()}"` : '';
       downloadModerationPdf({
         rows: rows.map(
@@ -545,13 +545,13 @@ const Moderation = () => {
           <div
             className="moderation-filter-segment moderation-filter-segment--score"
             role="group"
-            aria-label="Filter by AI score band"
+            aria-label="Filter by AI toxicity band"
           >
             {[
               ['all', 'All', 'All reviews'],
-              ['low', '🟢 Low', 'AI score band 0–30'],
-              ['mid', '🟠 Mid', 'AI score band 31–69'],
-              ['high', '🔴 High', 'AI score band 70–100'],
+              ['low', '🟢 Low', 'AI toxicity band 0–30'],
+              ['mid', '🟠 Mid', 'AI toxicity band 31–69'],
+              ['high', '🔴 High', 'AI toxicity band 70–100'],
             ].map(([id, label, hint]) => (
               <button
                 key={id}
@@ -627,7 +627,7 @@ const Moderation = () => {
                 ? 'No reviews match this search. Try different keywords.'
                 : scoreFilter === 'all'
                   ? 'No review records were returned for this page.'
-                  : 'No reviews match this AI score filter (or scores are still pending).'}
+                  : 'No reviews match this AI toxicity filter (or scores are still pending).'}
             </p>
           </div>
         ) : !error ? (

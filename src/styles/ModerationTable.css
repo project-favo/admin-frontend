@@ -6,7 +6,7 @@
   --moderation-table-text: #1a1a1a;
   --moderation-table-text-muted: #5c5c5c;
   width: 100%;
-  max-width: min(56rem, 100%);
+  max-width: min(72rem, 100%);
   min-width: 0;
   padding: 0;
   background: transparent;

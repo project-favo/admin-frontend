@@ -9,6 +9,10 @@ import {
 
 const DASHBOARD_POLL_MS = 5000;
 
+/** Snapshot mini pie: Reviews ile aynı bordo + gri dilimler */
+const SNAP_PIE_PRIMARY = 'var(--dash-accent)';
+const SNAP_PIE_MUTED = 'rgba(0, 0, 0, 0.28)';
+
 function MiniStatLoading() {
   return (
     <span className="dashboard-bounce-dots" aria-hidden="true">
@@ -29,6 +33,117 @@ function formatInteger(value) {
 function clamp01(x) {
   if (!Number.isFinite(x)) return 0;
   return Math.min(1, Math.max(0, x));
+}
+
+/** İki veya daha fazla dilim için snapshot kartı pasta grafiği (viewBox 100×100) */
+function wedgePath(cx, cy, r, deg0, deg1) {
+  const rad = Math.PI / 180;
+  const t0 = deg0 * rad - Math.PI / 2;
+  const t1 = deg1 * rad - Math.PI / 2;
+  const x0 = cx + r * Math.cos(t0);
+  const y0 = cy + r * Math.sin(t0);
+  const x1 = cx + r * Math.cos(t1);
+  const y1 = cy + r * Math.sin(t1);
+  const large = deg1 - deg0 > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`;
+}
+
+function snapshotPieSlices(cx, cy, r, items) {
+  const cleaned = items
+    .map((it) => ({
+      ...it,
+      value: Number.isFinite(it.value) && it.value > 0 ? it.value : 0,
+    }))
+    .filter((it) => it.value > 0);
+  const total = cleaned.reduce((s, it) => s + it.value, 0);
+  if (total <= 0) return [];
+
+  if (cleaned.length === 1) {
+    return [{ key: cleaned[0].key ?? 'a', fill: cleaned[0].color, kind: /** @type {'circle'} */ ('circle') }];
+  }
+
+  let a = -90;
+  const out = [];
+  for (const it of cleaned) {
+    const sweep = (it.value / total) * 360;
+    if (sweep < 0.02) {
+      a += sweep;
+      continue;
+    }
+    out.push({
+      key: it.key ?? String(a),
+      fill: it.color,
+      kind: /** @type {'path'} */ ('path'),
+      d: wedgePath(cx, cy, r, a, a + sweep),
+    });
+    a += sweep;
+  }
+  return out;
+}
+
+function SnapshotMiniPie({ segments, ariaLabel }) {
+  const cx = 50;
+  const cy = 50;
+  const r = 40;
+  const total = segments.reduce((s, x) => s + (Number.isFinite(x.value) ? Math.max(0, x.value) : 0), 0);
+
+  if (total <= 0) {
+    return <p className="dashboard-snap-pie-empty">—</p>;
+  }
+
+  const slices = snapshotPieSlices(cx, cy, r, segments);
+  return (
+    <div className="dashboard-snap-pie-row">
+      <svg
+        viewBox="0 0 100 100"
+        className="dashboard-snap-pie-svg"
+        role="img"
+        aria-label={ariaLabel}
+      >
+        {slices.map((s) =>
+          s.kind === 'circle' ? (
+            <circle key={s.key} cx={cx} cy={cy} r={r} fill={s.fill} className="dashboard-snap-pie-slice" />
+          ) : (
+            <path
+              key={s.key}
+              d={s.d}
+              fill={s.fill}
+              className="dashboard-snap-pie-slice"
+              stroke="var(--dash-surface)"
+              strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
+            />
+          )
+        )}
+      </svg>
+      <ul className="dashboard-snap-pie-legend">
+        {segments.map((seg) => {
+          const v = Number.isFinite(seg.value) ? Math.max(0, seg.value) : 0;
+          const pct = total > 0 ? (v / total) * 100 : 0;
+          return (
+            <li key={seg.key} className="dashboard-snap-pie-legend-item">
+              <span
+                className="dashboard-snap-pie-swatch"
+                style={{ background: seg.color }}
+                aria-hidden="true"
+              />
+              <span className="dashboard-snap-pie-legend-line">
+                <span className="dashboard-snap-pie-legend-name">{seg.label}</span>
+                <span className="dashboard-snap-pie-legend-sep" aria-hidden="true">
+                  ·
+                </span>
+                <span className="dashboard-snap-pie-legend-count">{formatInteger(v) ?? '0'}</span>
+                <span className="dashboard-snap-pie-legend-sep" aria-hidden="true">
+                  ·
+                </span>
+                <span className="dashboard-snap-pie-legend-pct">{pct.toFixed(1)}%</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 /** İncelemeler: sponsor / organik oranı (aktif incelemeler üzerinden) */
@@ -89,16 +204,16 @@ function SponsoredDonut({ pctSponsored, loading }) {
   );
 }
 
-function SnapshotCard({ title, value, valueLoading, detail, detailLoading }) {
+function SnapshotCard({ title, value, valueLoading, footer, footerLoading }) {
   return (
     <article className="dashboard-snap-card">
       <h3 className="dashboard-snap-title">{title}</h3>
       <div className="dashboard-snap-value" aria-live="polite">
         {valueLoading ? <MiniStatLoading /> : value ?? '—'}
       </div>
-      <p className="dashboard-snap-detail">
-        {detailLoading ? <MiniStatLoading /> : detail ?? '\u00a0'}
-      </p>
+      <div className="dashboard-snap-footer">
+        {footerLoading ? <MiniStatLoading /> : footer ?? '\u00a0'}
+      </div>
     </article>
   );
 }
@@ -165,16 +280,14 @@ function categoryLabelFromProduct(p) {
   return 'Uncategorized';
 }
 
-const TOPIC_BAR_HUES = [200, 328, 152, 42, 265, 12, 95, 220, 55, 310];
-
 function TopicRankedBars({ title, sub, rows, loading, emptyHint, cappedHint }) {
   const max = Math.max(1, ...rows.map((r) => (Number.isFinite(r.count) ? r.count : 0)));
 
   return (
     <div className="dashboard-topic-panel">
-      <div className="dashboard-viz-block-head">
-        <span className="dashboard-viz-block-title">{title}</span>
-        <span className="dashboard-viz-block-sub">{sub}</span>
+      <div className="dashboard-topic-head">
+        <span className="dashboard-topic-head-title">{title}</span>
+        {sub ? <span className="dashboard-topic-head-sub">{sub}</span> : null}
       </div>
       {loading ? (
         <div className="dashboard-topic-list dashboard-topic-list--loading" aria-hidden="true">
@@ -194,7 +307,6 @@ function TopicRankedBars({ title, sub, rows, loading, emptyHint, cappedHint }) {
           {rows.map((row, i) => {
             const n = Number.isFinite(row.count) ? row.count : 0;
             const pct = clamp01(n / max) * 100;
-            const hue = TOPIC_BAR_HUES[i % TOPIC_BAR_HUES.length];
             return (
               <li key={`${row.label}-${i}`} className="dashboard-topic-row">
                 <div className="dashboard-topic-meta">
@@ -204,13 +316,7 @@ function TopicRankedBars({ title, sub, rows, loading, emptyHint, cappedHint }) {
                   <span className="dashboard-topic-count">{formatInteger(n)}</span>
                 </div>
                 <div className="dashboard-topic-track">
-                  <div
-                    className="dashboard-topic-bar"
-                    style={{
-                      width: `${pct}%`,
-                      background: `hsl(${hue} 52% 40%)`,
-                    }}
-                  />
+                  <div className="dashboard-topic-bar" style={{ width: `${pct}%` }} />
                 </div>
               </li>
             );
@@ -561,32 +667,39 @@ const Dashboard = () => {
     [reviewLast7Days]
   );
 
-  const usersDetail =
-    userCountTotal != null && userCountTotal > 0 && userCountActive != null && suspendedUsers != null
-      ? `${formatInteger(userCountActive)} active · ${formatInteger(suspendedUsers)} susp. · ${(
-          (userCountActive / userCountTotal) *
-          100
-        ).toFixed(1)}% of registered`
-      : userCountActive != null && suspendedUsers != null
-        ? `${formatInteger(userCountActive)} active · ${formatInteger(suspendedUsers)} suspended`
-        : null;
-  const productsDetail =
-    productCountTotal != null && productCountTotal > 0 && productCountActive != null && inactiveProducts != null
-      ? `${formatInteger(productCountActive)} live · ${formatInteger(inactiveProducts)} off · ${(
-          (productCountActive / productCountTotal) *
-          100
-        ).toFixed(1)}% published`
-      : productCountActive != null && inactiveProducts != null
-        ? `${formatInteger(productCountActive)} live · ${formatInteger(inactiveProducts)} off`
-        : null;
-  const reviewsDetailText =
+  const usersPieReady =
+    userCountTotal != null &&
+    userCountTotal >= 0 &&
+    userCountActive != null &&
+    suspendedUsers != null;
+  const productsPieReady =
+    productCountTotal != null &&
+    productCountTotal >= 0 &&
+    productCountActive != null &&
+    inactiveProducts != null;
+  const reviewsWeekCapped =
     reviewCountTotal != null && reviewCountTotal >= 0
-      ? reviewCountTotal > 0
-        ? `${formatInteger(reviewsWeekSum)} in last 7d · ${((reviewsWeekSum / reviewCountTotal) * 100).toFixed(
-            1
-          )}% of ${formatInteger(reviewCountTotal)} all-time`
-        : `${formatInteger(reviewsWeekSum)} in last 7d`
-      : '—';
+      ? Math.min(reviewsWeekSum, reviewCountTotal)
+      : reviewsWeekSum;
+  const reviewsOlder =
+    reviewCountTotal != null && reviewCountTotal >= 0
+      ? Math.max(0, reviewCountTotal - reviewsWeekCapped)
+      : null;
+  const reviewsPieReady =
+    reviewCountTotal != null && reviewCountTotal >= 0 && reviewsOlder != null;
+
+  const usersPieAria =
+    usersPieReady && userCountTotal > 0
+      ? `Users: ${formatInteger(userCountActive)} active, ${formatInteger(suspendedUsers)} suspended`
+      : 'Users distribution';
+  const productsPieAria =
+    productsPieReady && productCountTotal > 0
+      ? `Products: ${formatInteger(productCountActive)} live, ${formatInteger(inactiveProducts)} inactive`
+      : 'Products distribution';
+  const reviewsPieAria =
+    reviewsPieReady && reviewCountTotal > 0
+      ? `Reviews: ${formatInteger(reviewsWeekCapped)} in the last seven days, ${formatInteger(reviewsOlder)} older`
+      : 'Reviews: last seven days versus older';
 
   return (
     <div className="dashboard">
@@ -619,24 +732,88 @@ const Dashboard = () => {
               title="Users"
               value={formatInteger(userCountTotal)}
               valueLoading={usersMiniLoading && userCountTotal == null}
-              detail={usersMiniLoading && userCountTotal == null ? null : usersDetail ?? '—'}
-              detailLoading={usersMiniLoading && userCountTotal == null}
+              footer={
+                <SnapshotMiniPie
+                  ariaLabel={usersPieAria}
+                  segments={
+                    usersPieReady
+                      ? [
+                          {
+                            key: 'active',
+                            label: 'Active',
+                            value: userCountActive,
+                            color: SNAP_PIE_PRIMARY,
+                          },
+                          {
+                            key: 'suspended',
+                            label: 'Suspended',
+                            value: suspendedUsers,
+                            color: SNAP_PIE_MUTED,
+                          },
+                        ]
+                      : []
+                  }
+                />
+              }
+              footerLoading={usersMiniLoading && userCountTotal == null}
             />
             <SnapshotCard
               title="Products"
               value={formatInteger(productCountTotal)}
               valueLoading={productsMiniLoading && productCountTotal == null}
-              detail={productsMiniLoading && productCountTotal == null ? null : productsDetail ?? '—'}
-              detailLoading={productsMiniLoading && productCountTotal == null}
+              footer={
+                <SnapshotMiniPie
+                  ariaLabel={productsPieAria}
+                  segments={
+                    productsPieReady
+                      ? [
+                          {
+                            key: 'live',
+                            label: 'Active',
+                            value: productCountActive,
+                            color: SNAP_PIE_PRIMARY,
+                          },
+                          {
+                            key: 'off',
+                            label: 'Inactive',
+                            value: inactiveProducts,
+                            color: SNAP_PIE_MUTED,
+                          },
+                        ]
+                      : []
+                  }
+                />
+              }
+              footerLoading={productsMiniLoading && productCountTotal == null}
             />
             <SnapshotCard
               title="Reviews"
               value={formatInteger(reviewCountTotal)}
               valueLoading={reviewsMiniLoading && reviewCountTotal == null}
-              detail={
-                reviewsMiniLoading && reviewCountTotal == null ? null : reviewsDetailText
+              footer={
+                <SnapshotMiniPie
+                  ariaLabel={reviewsPieAria}
+                  segments={
+                    reviewsPieReady
+                      ? [
+                          {
+                            key: '7d',
+                            label: 'Last 7 days',
+                            value: reviewsWeekCapped,
+                            color: SNAP_PIE_PRIMARY,
+                          },
+                          {
+                            key: 'older',
+                            label: 'Older',
+                            value: reviewsOlder,
+                            color: SNAP_PIE_MUTED,
+                          },
+                        ]
+                      : []
+                  }
+                />
               }
-              detailLoading={reviewsMiniLoading && reviewCountTotal == null}
+              footerLoading={reviewsMiniLoading && reviewCountTotal == null}
             />
           </div>
         </section>
@@ -649,7 +826,10 @@ const Dashboard = () => {
             <h2 id="dashboard-engage-title" className="dashboard-section-heading">
               Reviews
             </h2>
-            <p className="dashboard-section-dek dashboard-section-dek--tight">
+            <p
+              className="dashboard-section-dek dashboard-section-dek--tight"
+              title="Sponsored mix and daily volume (active reviews; sampling may cap extremes)."
+            >
               Sponsored mix and daily volume (active reviews; sampling may cap extremes).
             </p>
           </div>
@@ -677,14 +857,17 @@ const Dashboard = () => {
             <h2 id="dashboard-topics-title" className="dashboard-section-heading">
               Catalog by category
             </h2>
-            <p className="dashboard-section-dek dashboard-section-dek--tight">
+            <p
+              className="dashboard-section-dek dashboard-section-dek--tight"
+              title="Leaf paths from sampled active products — volume vs. new in the last 7 days."
+            >
               Leaf paths from sampled active products — volume vs. new in the last 7 days.
             </p>
           </div>
           <div className="dashboard-topics-grid">
             <TopicRankedBars
               title="Volume"
-              sub="Top leaf paths"
+              sub="All-time in sample"
               rows={topicTotals}
               loading={topicsLoading && topicTotals.length === 0}
               emptyHint="No categories in sample."
@@ -692,7 +875,7 @@ const Dashboard = () => {
             />
             <TopicRankedBars
               title="New (7d)"
-              sub="By first-seen date"
+              sub="Last seven days"
               rows={topicNew7d}
               loading={topicsLoading && topicNew7d.length === 0}
               emptyHint="None or dates missing."

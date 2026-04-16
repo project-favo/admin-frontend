@@ -37,7 +37,7 @@ export function downloadModerationPdf({ rows, filterLabel }) {
   ]);
   autoTable(doc, {
     startY: margin + 48,
-    head: [['Content preview', 'Product', 'Collaborative', 'Likes', 'AI score']],
+    head: [['Content preview', 'Product', 'Collaborative', 'Likes', 'AI toxicity']],
     body,
     styles: { fontSize: 8, cellPadding: 5 },
     headStyles: { fillColor: [55, 55, 55], textColor: 255 },

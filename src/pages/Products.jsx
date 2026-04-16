@@ -75,12 +75,10 @@ function mapAdminProductsDtoToRows(dto, page) {
   return content.map((p, idx) => mapProductDtoToRow(p, page, idx));
 }
 
-/** @param {{ id: string, name: string, category: string, statusLabel: string }} row */
+/** @param {{ name: string }} row */
 function productRowMatchesQuery(row, qLower) {
   if (!qLower) return true;
-  return [row.id, row.name, row.category, row.statusLabel].some((field) =>
-    String(field).toLowerCase().includes(qLower)
-  );
+  return String(row.name).toLowerCase().includes(qLower);
 }
 
 function readProductPageMeta(dto) {
@@ -635,10 +633,10 @@ const Products = () => {
             <input
               type="search"
               className="products-toolbar-search-input"
-              placeholder="Search by name, ID, category…"
+              placeholder="Search by product name"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              aria-label="Search products"
+              aria-label="Search products by name"
               autoComplete="off"
             />
           </div>

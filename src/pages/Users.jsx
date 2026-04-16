@@ -38,12 +38,12 @@ function parseSpringPageMeta(dto) {
   return { totalElements, totalPages };
 }
 
-/** @param {{ username: string, email: string, id: string }} row */
+/** @param {{ username: string }} row */
 function userRowMatchesQuery(row, qLower) {
   if (!qLower) return true;
-  return [row.username, row.email, row.id].some((field) =>
-    String(field).toLowerCase().includes(qLower)
-  );
+  return String(row.username ?? '')
+    .toLowerCase()
+    .includes(qLower);
 }
 
 const USERS_POLL_MS = 5000;
@@ -326,10 +326,10 @@ const Users = () => {
             <input
               type="search"
               className="users-toolbar-search-input"
-              placeholder="Search by username, email, ID…"
+              placeholder="Search by username"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              aria-label="Search users"
+              aria-label="Search users by username"
               autoComplete="off"
             />
           </div>
@@ -371,7 +371,7 @@ const Users = () => {
             <p className="users-empty-title">No users to show</p>
             <p className="users-empty-hint">
               {isSearchActive
-                ? 'No users match this search. Try different keywords.'
+                ? 'No users match this username search. Try a different username.'
                 : filter === 'active'
                   ? 'There are no active users matching this filter.'
                   : 'No user records were returned for this page.'}

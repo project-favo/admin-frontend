@@ -11,7 +11,28 @@ import {
 } from '../api/adminApi';
 import { downloadModerationPdf } from '../utils/moderationPdfExport';
 import { getTablePageSize } from '../utils/adminPreferences';
+import {
+  buildTextForLocalToxicityEstimate,
+  estimateToxicityPercentFromText,
+  extractToxicityScore,
+  getReviewToxicityPercent,
+  toxicityToPercent,
+} from '../utils/reviewToxicityScore';
+import {
+  addBrowserHiddenReviewIds,
+  computeModerationRowFlags,
+  loadAutoRejectedIdSet,
+  loadBrowserHiddenIdSet,
+  removeTrackedModerationId,
+} from '../utils/reviewModerationTracking';
 import loadingDots from '../assets/loading-dots.svg';
+
+function loadModerationTrackingSets() {
+  return {
+    autoRejected: loadAutoRejectedIdSet(),
+    browserHidden: loadBrowserHiddenIdSet(),
+  };
+}
 
 function formatInteger(value) {
   if (value == null) return null;
@@ -77,64 +98,6 @@ function formatProductLabel(review) {
   return '—';
 }
 
-/**
- * ReviewResponseDto / JSON: toxicityScore (Double 0–1). Bazı ortamlar snake_case dönebilir.
- * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/Domain/review/ReviewResponseDto.java
- */
-function extractToxicityScore(review) {
-  if (!review || typeof review !== 'object') return null;
-  const nested =
-    review.toxicity && typeof review.toxicity === 'object' ? review.toxicity.score : undefined;
-  const v =
-    review.toxicityScore ??
-    review.toxicity_score ??
-    review.toxicScore ??
-    nested;
-  if (v == null) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-/** Backend HF analizi yalnızca description üzerinde; tahminde de ağırlık buna yakın. */
-function buildTextForLocalToxicityEstimate(review) {
-  const title = review?.title != null ? String(review.title).trim() : '';
-  const desc = review?.description != null ? String(review.description).trim() : '';
-  if (desc && title && desc !== title) return `${desc}\n${title}`;
-  return desc || title || '';
-}
-
-/**
- * API skoru yokken (DB'de null — çoğunlukla HUGGINGFACE_API_TOKEN eksik veya eski kayıt) gösterilebilir bir 0–100 tahmin.
- * Gerçek model skoru değildir; ToxicityService ile aynı değeri vermez.
- */
-function estimateToxicityPercentFromText(text) {
-  const s = text != null ? String(text).trim() : '';
-  if (!s) return null;
-  const lower = s.toLowerCase();
-  let hits = 0;
-  const wordPatterns = [
-    /\b(siktir|sikerim|orospu|piç|aptal|salak|gerizekalı|şerefsiz|kahpe|öldür|katil)\b/giu,
-    /\b(fuck|shit|bitch|asshole|crap|damn|hate|kill|idiot|stupid|moron|dumb)\b/giu,
-  ];
-  for (const p of wordPatterns) {
-    const m = lower.match(p);
-    if (m) hits += m.length;
-  }
-  const chaos =
-    (s.match(/[!]{3,}/g) || []).length + (s.match(/[A-Za-z]{20,}/g) || []).length;
-  hits += chaos;
-  const raw = Math.min(95, hits * 16 + (s.length > 800 ? 8 : 0));
-  return Math.round(raw);
-}
-
-/** 0–1 veya 0–100 değerini yüzde tamsayıya çevirir (HuggingFace "toxic" skoru 0–1). */
-function toxicityToPercent(raw) {
-  if (raw == null) return null;
-  if (raw >= 0 && raw <= 1) return Math.round(raw * 100);
-  if (raw > 1 && raw <= 100) return Math.round(raw);
-  return null;
-}
-
 /** Arayüz: 0–30 yeşil, 31–69 turuncu, 70–100 kırmızı (toxicity yüzdesi). */
 function aiScoreToneFromPercent(pct) {
   if (pct == null || !Number.isFinite(pct)) return null;
@@ -150,19 +113,8 @@ function aiScoreEmojiFromTone(tone) {
   return '';
 }
 
-/** formatAiScoreFromReview ile aynı yüzde kaynağı; filtre eşlemesi için */
-function getPercentForFilter(review) {
-  const raw = extractToxicityScore(review);
-  let pct = toxicityToPercent(raw);
-  if (pct == null) {
-    const text = buildTextForLocalToxicityEstimate(review);
-    pct = estimateToxicityPercentFromText(text);
-  }
-  return pct != null && Number.isFinite(pct) ? pct : null;
-}
-
 function getReviewScoreTone(review) {
-  const pct = getPercentForFilter(review);
+  const pct = getReviewToxicityPercent(review);
   if (pct == null) return null;
   return aiScoreToneFromPercent(pct);
 }
@@ -224,12 +176,33 @@ function formatAiScoreFromReview(review) {
 
 const MODERATION_POLL_MS = 5000;
 
-function mapReviewDtoToRow(r, pageNum, idx) {
+function mapReviewDtoToRow(r, pageNum, idx, sets) {
+  const tracking = sets ?? loadModerationTrackingSets();
   const rawId = r?.id ?? r?.reviewId;
+  const idStr = rawId != null ? String(rawId) : `${pageNum}-${idx}`;
+  const hasNumericId =
+    rawId != null && String(rawId).trim() !== '' && Number.isFinite(Number(rawId));
   const { display, title, scoreTone } = formatAiScoreFromReview(r);
+
+  let moderationStatusKind = /** @type {'published' | 'rejected' | 'auto_rejected'} */ (
+    'published'
+  );
+  if (hasNumericId) {
+    const flags = computeModerationRowFlags(
+      r,
+      idStr,
+      tracking.autoRejected,
+      tracking.browserHidden
+    );
+    if (flags.hidden) {
+      moderationStatusKind = flags.isAutoRejected ? 'auto_rejected' : 'rejected';
+    }
+  }
+
   return {
-    id: rawId != null ? String(rawId) : `${pageNum}-${idx}`,
-    hasNumericId: rawId != null && String(rawId).trim() !== '' && Number.isFinite(Number(rawId)),
+    id: idStr,
+    hasNumericId,
+    moderationStatusKind,
     contentPreview: toContentPreview(r),
     productLabel: formatProductLabel(r),
     collaborativeLabel: formatCollaborativeLabel(r),
@@ -240,9 +213,9 @@ function mapReviewDtoToRow(r, pageNum, idx) {
   };
 }
 
-function mapAdminPageDtoToRows(dto, pageNum) {
+function mapAdminPageDtoToRows(dto, pageNum, sets) {
   const content = Array.isArray(dto?.content) ? dto.content : [];
-  return content.map((r, idx) => mapReviewDtoToRow(r, pageNum, idx));
+  return content.map((r, idx) => mapReviewDtoToRow(r, pageNum, idx, sets));
 }
 
 function readPageMeta(dto) {
@@ -340,7 +313,8 @@ const Moderation = () => {
           const tp = n === 0 ? 0 : Math.ceil(n / size);
           const slice = filtered.slice(page * size, page * size + size);
           setError(null);
-          setRows(slice.map((r, idx) => mapReviewDtoToRow(r, page, idx)));
+          const setsSearch = loadModerationTrackingSets();
+          setRows(slice.map((r, idx) => mapReviewDtoToRow(r, page, idx, setsSearch)));
           setTotalElements(n);
           setTotalPages(tp);
         } else if (scoreFilter === 'all') {
@@ -357,7 +331,8 @@ const Moderation = () => {
           const dto = await res.json();
           if (cancelled) return;
           setError(null);
-          setRows(mapAdminPageDtoToRows(dto, page));
+          const setsPage = loadModerationTrackingSets();
+          setRows(mapAdminPageDtoToRows(dto, page, setsPage));
           const meta = readPageMeta(dto);
           setTotalElements(meta.totalElements);
           setTotalPages(meta.totalPages);
@@ -373,7 +348,8 @@ const Moderation = () => {
           const tp = n === 0 ? 0 : Math.ceil(n / size);
           const slice = filtered.slice(page * size, page * size + size);
           setError(null);
-          setRows(slice.map((r, idx) => mapReviewDtoToRow(r, page, idx)));
+          const setsBand = loadModerationTrackingSets();
+          setRows(slice.map((r, idx) => mapReviewDtoToRow(r, page, idx, setsBand)));
           setTotalElements(n);
           setTotalPages(tp);
         }
@@ -441,7 +417,8 @@ const Moderation = () => {
       if (isSearchActive) {
         filtered = filtered.filter((r) => reviewMatchesSearch(r, searchTrim));
       }
-      const rows = filtered.map((r, idx) => mapReviewDtoToRow(r, 0, idx));
+      const setsPdf = loadModerationTrackingSets();
+      const rows = filtered.map((r, idx) => mapReviewDtoToRow(r, 0, idx, setsPdf));
       const filterLabel =
         scoreFilter === 'all'
           ? 'All reviews'
@@ -484,6 +461,7 @@ const Moderation = () => {
         const msg = await messageFromFailedResponse(res);
         throw new Error(msg);
       }
+      removeTrackedModerationId(id);
       setListVersion((v) => v + 1);
       setActionFeedback({ ok: true, message: 'Review approved (published).' });
     } catch (e) {
@@ -504,6 +482,7 @@ const Moderation = () => {
         const msg = await messageFromFailedResponse(res);
         throw new Error(msg);
       }
+      addBrowserHiddenReviewIds([id]);
       setListVersion((v) => v + 1);
       setActionFeedback({ ok: true, message: 'Review rejected (hidden).' });
     } catch (e) {

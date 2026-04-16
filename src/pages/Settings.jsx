@@ -16,6 +16,16 @@ import {
   TABLE_PAGE_SIZE_OPTIONS,
 } from '../utils/adminPreferences';
 import pkg from '../../package.json';
+import {
+  fetchAllAdminReviews,
+  messageFromFailedResponse,
+  patchAdminReviewDeactivate,
+} from '../api/adminApi';
+import { getReviewToxicityPercent } from '../utils/reviewToxicityScore';
+import {
+  addAutoRejectedReviewIds,
+  addBrowserHiddenReviewIds,
+} from '../utils/reviewModerationTracking';
 
 const CLIENT_SETTINGS_KEY = 'favo.admin.clientSettings.v1';
 
@@ -98,7 +108,6 @@ function environmentModeLabel() {
 const Settings = () => {
   const { logout } = useAuth();
   const saved = loadClientSettings();
-  const [spamSensitivity, setSpamSensitivity] = useState(saved?.spamSensitivity ?? 'high');
   const [autoRejectThreshold, setAutoRejectThreshold] = useState(() =>
     normalizeAutoRejectThreshold(saved?.autoRejectThreshold)
   );
@@ -112,6 +121,8 @@ const Settings = () => {
   const [pwStatus, setPwStatus] = useState({ kind: 'idle', message: '' });
   const [signOutBusy, setSignOutBusy] = useState(false);
   const [copyApiStatus, setCopyApiStatus] = useState('idle');
+  const [aiAutoRejectBusy, setAiAutoRejectBusy] = useState(false);
+  const [aiAutoRejectFeedback, setAiAutoRejectFeedback] = useState(null);
   const [sessionTimes, setSessionTimes] = useState({
     memberSince: '—',
     lastSignIn: '—',
@@ -180,13 +191,65 @@ const Settings = () => {
     return () => unsub();
   }, []);
 
-  const handleSaveAiSettings = useCallback(() => {
-    saveClientSettings({
-      spamSensitivity,
-      autoRejectThreshold,
-    });
+  const handleSaveAiSettings = useCallback(async () => {
     setPwStatus({ kind: 'idle', message: '' });
-  }, [spamSensitivity, autoRejectThreshold]);
+    setAiAutoRejectFeedback(null);
+    setAiAutoRejectBusy(true);
+    try {
+      saveClientSettings({ autoRejectThreshold });
+      const thresholdNum = Number(autoRejectThreshold);
+      const reviews = await fetchAllAdminReviews({
+        activeOnly: true,
+        pageSize: 200,
+      });
+      const toHide = reviews.filter((r) => {
+        const pct = getReviewToxicityPercent(r);
+        return pct != null && pct >= thresholdNum;
+      });
+      let hidden = 0;
+      const failMsgs = [];
+      const succeededIds = [];
+      for (const r of toHide) {
+        const rawId = r?.id ?? r?.reviewId;
+        if (rawId == null || String(rawId).trim() === '') continue;
+        const res = await patchAdminReviewDeactivate(String(rawId));
+        if (res.ok) {
+          hidden += 1;
+          succeededIds.push(String(rawId));
+        } else {
+          failMsgs.push(await messageFromFailedResponse(res));
+        }
+      }
+      if (succeededIds.length > 0) {
+        addAutoRejectedReviewIds(succeededIds);
+        addBrowserHiddenReviewIds(succeededIds);
+      }
+      if (toHide.length === 0) {
+        setAiAutoRejectFeedback({
+          kind: 'ok',
+          message:
+            'Threshold saved. No active reviews were at or above this toxicity level (or scores were unavailable).',
+        });
+      } else if (failMsgs.length === 0) {
+        setAiAutoRejectFeedback({
+          kind: 'ok',
+          message: `Threshold saved. Hidden ${hidden} active review${hidden === 1 ? '' : 's'} at or above ${thresholdNum}%.`,
+        });
+      } else {
+        setAiAutoRejectFeedback({
+          kind: 'error',
+          message: `Hidden ${hidden} of ${toHide.length}. Some requests failed: ${failMsgs.slice(0, 3).join(' ')}`,
+        });
+      }
+    } catch (e) {
+      setAiAutoRejectFeedback({
+        kind: 'error',
+        message: e instanceof Error ? e.message : 'Could not apply auto-reject.',
+      });
+    } finally {
+      setAiAutoRejectBusy(false);
+    }
+  }, [autoRejectThreshold]);
 
   const handleDataRetentionChange = useCallback((e) => {
     const v = e.target.value;
@@ -311,21 +374,11 @@ const Settings = () => {
         <div className="settings-grid settings-grid--pair">
             <SettingsCard title="AI moderation">
               <p className="settings-hint">
-                These preferences are stored in this browser only. They are not sent to the API yet
-                and do not change live moderation behavior on the server.
+                The threshold is saved in this browser. When you apply, every <strong>active</strong>{' '}
+                review whose AI toxicity score is at or above that percentage is hidden (same as
+                Reject on the moderation page). Scores match the moderation list (API value or local
+                text estimate when missing).
               </p>
-              <SettingRow label="Spam filter sensitivity">
-                <select
-                  className="settings-select"
-                  aria-label="Spam filter sensitivity"
-                  value={spamSensitivity}
-                  onChange={(e) => setSpamSensitivity(e.target.value)}
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                </select>
-              </SettingRow>
               <SettingRow label="Auto-reject threshold">
                 <select
                   className="settings-select"
@@ -343,10 +396,22 @@ const Settings = () => {
                   type="button"
                   className="settings-btn settings-btn--secondary"
                   onClick={handleSaveAiSettings}
+                  disabled={aiAutoRejectBusy}
+                  aria-busy={aiAutoRejectBusy}
                 >
-                  Save AI settings
+                  {aiAutoRejectBusy ? 'Applying…' : 'Save threshold & hide matching reviews'}
                 </button>
               </div>
+              {aiAutoRejectFeedback?.kind === 'ok' && (
+                <p className="settings-alert settings-alert--success settings-alert--compact" role="status">
+                  {aiAutoRejectFeedback.message}
+                </p>
+              )}
+              {aiAutoRejectFeedback?.kind === 'error' && (
+                <p role="alert" className="settings-alert settings-alert--error settings-alert--compact">
+                  {aiAutoRejectFeedback.message}
+                </p>
+              )}
             </SettingsCard>
 
             <SettingsCard title={'GDPR & data privacy'}>

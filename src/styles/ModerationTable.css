@@ -43,9 +43,9 @@
 }
 
 /* Dar alanda tablo taban genişliği; genişte %100 ile tüm sütunlar sığar */
-@container moderation-table-scroll (max-width: 52rem) {
+@container moderation-table-scroll (max-width: 58rem) {
   .moderation-table {
-    min-width: 52rem;
+    min-width: 58rem;
   }
 }
 
@@ -112,6 +112,14 @@
   background: rgba(145, 0, 41, 0.03);
 }
 
+.moderation-table tbody tr.moderation-table-row--inactive td {
+  background: rgba(0, 0, 0, 0.035);
+}
+
+.moderation-table tbody tr.moderation-table-row--inactive:hover td {
+  background: rgba(0, 0, 0, 0.05);
+}
+
 .moderation-cell-preview {
   color: var(--moderation-table-text);
   font-size: 0.9rem;
@@ -162,7 +170,7 @@
   display: inline-flex;
   flex-direction: column;
   flex-wrap: nowrap;
-  align-items: flex-end;
+  align-items: stretch;
   justify-content: flex-start;
   gap: 0.5rem;
   max-width: 100%;
@@ -223,27 +231,64 @@
 }
 
 .moderation-table-col-preview {
-  width: 30%;
+  width: 26%;
 }
 
 .moderation-table-col-product {
-  width: 22%;
+  width: 18%;
 }
 
 .moderation-table-col-collab {
-  width: 12%;
-}
-
-.moderation-table-col-likes {
   width: 10%;
 }
 
+.moderation-table-col-likes {
+  width: 8%;
+}
+
 .moderation-table-col-score {
-  width: 14%;
+  width: 12%;
+}
+
+.moderation-table-col-status {
+  width: 12%;
 }
 
 .moderation-table-col-actions {
-  width: 12%;
+  width: 14%;
+}
+
+.moderation-cell-status {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.moderation-status-pill {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.moderation-status-pill--published {
+  color: #166534;
+  background: rgba(22, 120, 70, 0.1);
+  border: 1px solid rgba(22, 120, 70, 0.25);
+}
+
+.moderation-status-pill--rejected {
+  color: #7f1d1d;
+  background: rgba(185, 28, 28, 0.08);
+  border: 1px solid rgba(185, 28, 28, 0.22);
+}
+
+.moderation-status-pill--auto {
+  color: #7c2d12;
+  background: rgba(234, 88, 12, 0.12);
+  border: 1px solid rgba(234, 88, 12, 0.28);
 }
 
 .moderation-table thead th:last-child,

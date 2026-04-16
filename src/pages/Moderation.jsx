@@ -48,11 +48,10 @@ function truncateText(text, maxLen) {
   return `${s.slice(0, Math.max(0, maxLen - 1))}…`;
 }
 
-function toContentPreview(review) {
+/** Title + description combined the same way as the Content preview column (before truncation). */
+function buildReviewPreviewBody(review) {
   const title = review?.title != null ? String(review.title).trim() : '';
   const desc = review?.description != null ? String(review.description).trim() : '';
-  const mediaCount = Array.isArray(review?.mediaList) ? review.mediaList.length : 0;
-  const mediaPrefix = mediaCount > 0 ? '🖼️ ' : '';
 
   let body = '';
   if (title && desc) {
@@ -66,6 +65,14 @@ function toContentPreview(review) {
   } else {
     body = title || desc;
   }
+
+  return body;
+}
+
+function toContentPreview(review) {
+  const body = buildReviewPreviewBody(review);
+  const mediaCount = Array.isArray(review?.mediaList) ? review.mediaList.length : 0;
+  const mediaPrefix = mediaCount > 0 ? '🖼️ ' : '';
 
   const display = body || '—';
   return `${mediaPrefix}"${truncateText(display, 120)}"`;
@@ -237,14 +244,11 @@ function readPageMeta(dto) {
 
 function reviewMatchesSearch(review, qLower) {
   if (!qLower) return true;
-  const id = review?.id != null ? String(review.id) : '';
-  const title = review?.title != null ? String(review.title) : '';
-  const desc = review?.description != null ? String(review.description) : '';
-  const productName = String(review?.productName ?? review?.product_name ?? '').trim();
-  const pid = review?.productId ?? review?.product_id;
-  const productIdStr = pid != null ? String(pid) : '';
-  const hay = `${id} ${title} ${desc} ${productName} ${productIdStr}`.toLowerCase();
-  return hay.includes(qLower);
+  const previewBody = buildReviewPreviewBody(review).toLowerCase();
+  const productName = String(review?.productName ?? review?.product_name ?? '')
+    .trim()
+    .toLowerCase();
+  return previewBody.includes(qLower) || productName.includes(qLower);
 }
 
 const Moderation = () => {
@@ -556,7 +560,7 @@ const Moderation = () => {
             <input
               type="search"
               className="moderation-toolbar-search-input"
-              placeholder="Search by product, text, review ID…"
+              placeholder="Search by content preview or product name…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               aria-label="Search reviews"

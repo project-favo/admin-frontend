@@ -197,34 +197,6 @@
   gap: 0.5rem;
 }
 
-.products-toolbar-newest {
-  padding: 0.35rem 0.65rem;
-  border-radius: 8px;
-  border: 1px solid var(--products-border);
-  background: rgba(255, 255, 255, 0.55);
-  color: var(--products-text);
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.products-toolbar-newest:hover:not(:disabled) {
-  border-color: var(--products-accent);
-  color: var(--products-accent);
-}
-
-.products-toolbar-newest:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 .products-toolbar-add {
   padding: 0.35rem 0.75rem;
   border-radius: 8px;

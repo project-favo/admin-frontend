@@ -481,6 +481,16 @@ const Moderation = () => {
 
   const goPrev = () => setPage((p) => Math.max(0, p - 1));
   const goNext = () => setPage((p) => p + 1);
+  const goFirst = () => setPage(0);
+  const goLast = () => {
+    if (typeof totalPages === 'number' && totalPages > 0) setPage(totalPages - 1);
+  };
+  const canFirst = page > 0 && !loading;
+  const canLast =
+    !loading &&
+    typeof totalPages === 'number' &&
+    totalPages > 1 &&
+    page < totalPages - 1;
 
   async function handleExportPdf() {
     if (exporting) return;
@@ -774,6 +784,10 @@ const Moderation = () => {
                 canNext={canNext}
                 onPrev={goPrev}
                 onNext={goNext}
+                canFirst={canFirst}
+                canLast={canLast}
+                onFirst={goFirst}
+                onLast={goLast}
               />
             </div>
             <ModerationTable
@@ -798,6 +812,10 @@ const Moderation = () => {
               canNext={canNext}
               onPrev={goPrev}
               onNext={goNext}
+              canFirst={canFirst}
+              canLast={canLast}
+              onFirst={goFirst}
+              onLast={goLast}
             />
           </div>
         </footer>

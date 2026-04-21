@@ -527,9 +527,16 @@ const Products = () => {
 
   const goPrev = () => setPage((p) => Math.max(0, p - 1));
   const goNext = () => setPage((p) => p + 1);
-  const goToNewestPage = () => {
+  const goFirst = () => setPage(0);
+  const goLast = () => {
     if (typeof totalPages === 'number' && totalPages > 0) setPage(totalPages - 1);
   };
+  const canFirst = page > 0 && !loading;
+  const canLast =
+    !loading &&
+    typeof totalPages === 'number' &&
+    totalPages > 1 &&
+    page < totalPages - 1;
 
   async function handleExportPdf() {
     if (exporting) return;
@@ -643,15 +650,6 @@ const Products = () => {
           <div className="products-toolbar-actions">
             <button
               type="button"
-              className="products-toolbar-newest"
-              title="Jump to the last page (newest products by ID)"
-              onClick={goToNewestPage}
-              disabled={loading || typeof totalPages !== 'number' || totalPages <= 1}
-            >
-              Newest
-            </button>
-            <button
-              type="button"
               className="products-toolbar-add"
               onClick={() => navigate('/products/new')}
             >
@@ -720,6 +718,10 @@ const Products = () => {
                 canNext={canNext}
                 onPrev={goPrev}
                 onNext={goNext}
+                canFirst={canFirst}
+                canLast={canLast}
+                onFirst={goFirst}
+                onLast={goLast}
               />
             </div>
             <ProductTable
@@ -746,6 +748,10 @@ const Products = () => {
               canNext={canNext}
               onPrev={goPrev}
               onNext={goNext}
+              canFirst={canFirst}
+              canLast={canLast}
+              onFirst={goFirst}
+              onLast={goLast}
             />
           </div>
         </footer>

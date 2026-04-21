@@ -9,6 +9,9 @@ import '../styles/ModerationTable.css';
  * @property {string} productLabel
  * @property {string} collaborativeLabel
  * @property {string} likeCountDisplay
+ * @property {string} userReportLabel
+ * @property {'reported'|'not_reported'|'unknown'} [userReportKind]
+ * @property {string} [userReportTitle]
  * @property {string} aiScore
  * @property {'low'|'mid'|'high'|null} [aiScoreTone] — yüzde skor için renk bandı
  * @property {string} [aiScoreTitle] — ham skor / durum için tooltip
@@ -32,6 +35,7 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
             <col className="moderation-table-col-product" />
             <col className="moderation-table-col-collab" />
             <col className="moderation-table-col-likes" />
+            <col className="moderation-table-col-reports" />
             <col className="moderation-table-col-score" />
             <col className="moderation-table-col-status" />
             <col className="moderation-table-col-actions" />
@@ -42,6 +46,7 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
               <th scope="col">Product</th>
               <th scope="col">Collaborative</th>
               <th scope="col">Likes</th>
+              <th scope="col">Reported</th>
               <th scope="col">AI Toxicity</th>
               <th scope="col">Status</th>
               <th scope="col">Actions</th>
@@ -57,6 +62,9 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
                 productLabel,
                 collaborativeLabel,
                 likeCountDisplay,
+                userReportLabel,
+                userReportKind = 'unknown',
+                userReportTitle,
                 aiScore,
                 aiScoreTone,
                 aiScoreTitle,
@@ -66,6 +74,12 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
                   aiScoreTone === 'low' || aiScoreTone === 'mid' || aiScoreTone === 'high'
                     ? `moderation-cell-score moderation-cell-score--${aiScoreTone}`
                     : 'moderation-cell-score';
+                const reportClass =
+                  userReportKind === 'reported'
+                    ? 'moderation-report-pill moderation-report-pill--reported'
+                    : userReportKind === 'not_reported'
+                      ? 'moderation-report-pill moderation-report-pill--clear'
+                      : 'moderation-report-pill';
 
                 const approveDisabled =
                   rowBusy ||
@@ -100,6 +114,11 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
                     <td className="moderation-cell-product">{productLabel}</td>
                     <td className="moderation-cell-collab">{collaborativeLabel}</td>
                     <td className="moderation-cell-likes">{likeCountDisplay}</td>
+                    <td className="moderation-cell-reports">
+                      <span className={reportClass} title={userReportTitle}>
+                        {userReportLabel}
+                      </span>
+                    </td>
                     <td className={scoreClass} title={aiScoreTitle}>
                       {aiScore}
                     </td>

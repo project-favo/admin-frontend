@@ -105,6 +105,46 @@ function formatProductLabel(review) {
   return '—';
 }
 
+/** Özet listesinde aynı ürünü iki kez göstermemek için (productId öncelikli). */
+function productKeyFromReview(review) {
+  const idRaw = review?.productId ?? review?.product_id;
+  if (idRaw != null && String(idRaw).trim() !== '') {
+    const n = Number(idRaw);
+    if (Number.isFinite(n)) return `id:${n}`;
+    return `id:${String(idRaw).trim()}`;
+  }
+  return `lbl:${formatProductLabel(review)}`;
+}
+
+function normalizeModerationStatus(review) {
+  return String(review?.moderationStatus ?? review?.moderation_status ?? '')
+    .trim()
+    .toUpperCase();
+}
+
+function getUserReportStatus(review) {
+  const moderationStatus = normalizeModerationStatus(review);
+  if (moderationStatus === 'MANUALLY_FLAGGED') {
+    return {
+      label: 'Reported',
+      kind: 'reported',
+      title: 'Flagged by users via review report flow.',
+    };
+  }
+  if (!moderationStatus) {
+    return {
+      label: '—',
+      kind: 'unknown',
+      title: 'Review moderation status is missing in API response.',
+    };
+  }
+  return {
+    label: 'Not reported',
+    kind: 'not_reported',
+    title: 'No user report flag on this review.',
+  };
+}
+
 /** Arayüz: 0–30 yeşil, 31–69 turuncu, 70–100 kırmızı (toxicity yüzdesi). */
 function aiScoreToneFromPercent(pct) {
   if (pct == null || !Number.isFinite(pct)) return null;
@@ -190,6 +230,7 @@ function mapReviewDtoToRow(r, pageNum, idx, sets) {
   const hasNumericId =
     rawId != null && String(rawId).trim() !== '' && Number.isFinite(Number(rawId));
   const { display, title, scoreTone } = formatAiScoreFromReview(r);
+  const reportStatus = getUserReportStatus(r);
 
   let moderationStatusKind = /** @type {'published' | 'rejected' | 'auto_rejected'} */ (
     'published'
@@ -212,8 +253,12 @@ function mapReviewDtoToRow(r, pageNum, idx, sets) {
     moderationStatusKind,
     contentPreview: toContentPreview(r),
     productLabel: formatProductLabel(r),
+    productKey: productKeyFromReview(r),
     collaborativeLabel: formatCollaborativeLabel(r),
     likeCountDisplay: formatReviewLikeCount(r),
+    userReportLabel: reportStatus.label,
+    userReportKind: reportStatus.kind,
+    userReportTitle: reportStatus.title,
     aiScore: display,
     aiScoreTitle: title,
     aiScoreTone: scoreTone,
@@ -391,6 +436,37 @@ const Moderation = () => {
   const formattedTotal = useMemo(() => formatInteger(totalElements), [totalElements]);
   const showingFrom = rows.length === 0 ? 0 : page * size + 1;
   const showingTo = page * size + rows.length;
+  const reportedOnPage = useMemo(
+    () => rows.filter((row) => row.userReportKind === 'reported'),
+    [rows]
+  );
+
+  const { reportedUniqueProductCount, reportedProductsPreview } = useMemo(() => {
+    /** @type {Map<string, { productKey: string, productLabel: string, reviews: { id: string, contentPreview: string }[] }>} */
+    const byProduct = new Map();
+    for (const row of reportedOnPage) {
+      const key = row.productKey ?? `lbl:${row.productLabel}`;
+      let group = byProduct.get(key);
+      if (!group) {
+        group = {
+          productKey: key,
+          productLabel: row.productLabel,
+          reviews: [],
+        };
+        byProduct.set(key, group);
+      }
+      group.reviews.push({
+        id: row.id,
+        contentPreview: row.contentPreview,
+      });
+    }
+    const groups = Array.from(byProduct.values());
+    return {
+      reportedUniqueProductCount: groups.length,
+      reportedProductsPreview: groups.slice(0, 3),
+    };
+  }, [reportedOnPage]);
+
   const canPrev = page > 0 && !loading;
   const canNext =
     !loading &&
@@ -503,7 +579,7 @@ const Moderation = () => {
         <header className="moderation-header">
           <h2 className="moderation-main-title">Content moderation</h2>
           <p className="moderation-subtitle">
-            Review queued content, filter by AI toxicity score band, and publish or hide reviews.
+            Review queued content, monitor user-reported comments, and publish or hide reviews.
           </p>
         </header>
 
@@ -595,6 +671,81 @@ const Moderation = () => {
           >
             {actionFeedback.message}
           </div>
+        )}
+
+        {!loading && !error && rows.length > 0 && (
+          <section
+            className="moderation-reported-summary"
+            aria-labelledby="moderation-reported-summary-title"
+          >
+            <div className="moderation-reported-summary-inner">
+              <header className="moderation-reported-summary-head">
+                <div className="moderation-reported-summary-heading">
+                  <h3 id="moderation-reported-summary-title" className="moderation-reported-summary-title">
+                    Reported on this page
+                  </h3>
+                </div>
+                <div
+                  className="moderation-reported-summary-metric"
+                  title="Distinct products among reported reviews on this page"
+                  aria-label={
+                    reportedUniqueProductCount === 1
+                      ? '1 distinct product'
+                      : `${formatInteger(reportedUniqueProductCount) ?? '0'} distinct products`
+                  }
+                >
+                  <span className="moderation-reported-summary-metric-value">
+                    {formatInteger(reportedUniqueProductCount) ?? '0'}
+                  </span>
+                  <span className="moderation-reported-summary-metric-label">products</span>
+                </div>
+              </header>
+              {reportedOnPage.length === 0 ? (
+                <p className="moderation-reported-summary-empty">
+                  No user-reported reviews on this page.
+                </p>
+              ) : (
+                <>
+                  <ul className="moderation-reported-summary-list" role="list">
+                    {reportedProductsPreview.map((group, i) => (
+                      <li key={group.productKey} className="moderation-reported-summary-item">
+                        <div className="moderation-reported-summary-item-head">
+                          <span className="moderation-reported-summary-index" aria-hidden="true">
+                            {i + 1}
+                          </span>
+                          <span className="moderation-reported-summary-product">{group.productLabel}</span>
+                        </div>
+                        <ul
+                          className="moderation-reported-summary-snippet-list"
+                          aria-label={`Reported reviews for ${group.productLabel}`}
+                        >
+                          {group.reviews.map((rev) => (
+                            <li key={rev.id} className="moderation-reported-summary-snippet-item">
+                              <span className="moderation-reported-summary-review-id" title="Review ID">
+                                #{rev.id}
+                              </span>
+                              <span className="moderation-reported-summary-snippet" title={rev.contentPreview}>
+                                {rev.contentPreview}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                  {reportedUniqueProductCount > reportedProductsPreview.length ? (
+                    <p className="moderation-reported-summary-more">
+                      +{formatInteger(reportedUniqueProductCount - reportedProductsPreview.length) ?? '0'}{' '}
+                      more{' '}
+                      {reportedUniqueProductCount - reportedProductsPreview.length === 1
+                        ? 'product'
+                        : 'products'}
+                    </p>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </section>
         )}
 
         {loading ? (

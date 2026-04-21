@@ -140,6 +140,34 @@
   white-space: nowrap;
 }
 
+.moderation-cell-reports {
+  white-space: nowrap;
+}
+
+.moderation-report-pill {
+  display: inline-block;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  background: rgba(17, 24, 39, 0.06);
+  color: #374151;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.moderation-report-pill--reported {
+  border-color: rgba(185, 28, 28, 0.35);
+  background: rgba(185, 28, 28, 0.1);
+  color: #991b1b;
+}
+
+.moderation-report-pill--clear {
+  border-color: rgba(22, 120, 70, 0.26);
+  background: rgba(22, 120, 70, 0.08);
+  color: #166534;
+}
+
 .moderation-cell-score {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -243,19 +271,23 @@
 }
 
 .moderation-table-col-likes {
-  width: 8%;
+  width: 7%;
+}
+
+.moderation-table-col-reports {
+  width: 14%;
 }
 
 .moderation-table-col-score {
-  width: 12%;
+  width: 9%;
 }
 
 .moderation-table-col-status {
-  width: 12%;
+  width: 10%;
 }
 
 .moderation-table-col-actions {
-  width: 14%;
+  width: 10%;
 }
 
 .moderation-cell-status {

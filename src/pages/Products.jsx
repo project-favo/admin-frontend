@@ -1,4 +1,5 @@
 import '../styles/Products.css';
+import NewCategoryPathDialog from '../components/NewCategoryPathDialog';
 import ProductTable from '../components/ProductTable';
 import TablePagination from '../components/TablePagination';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -213,6 +214,10 @@ const Products = () => {
   );
   const [searchInput, setSearchInput] = useState('');
   const [listRefreshKey, setListRefreshKey] = useState(0);
+  const [newCategoryOpen, setNewCategoryOpen] = useState(false);
+  const [newCategoryFeedback, setNewCategoryFeedback] = useState(
+    /** @type {null | { ok: boolean, message: string }} */ (null)
+  );
 
   const searchTrim = useMemo(() => searchInput.trim().toLowerCase(), [searchInput]);
   const isSearchActive = searchTrim.length > 0;
@@ -650,6 +655,13 @@ const Products = () => {
           <div className="products-toolbar-actions">
             <button
               type="button"
+              className="products-toolbar-new-category"
+              onClick={() => setNewCategoryOpen(true)}
+            >
+              New category
+            </button>
+            <button
+              type="button"
               className="products-toolbar-add"
               onClick={() => navigate('/products/new')}
             >
@@ -689,6 +701,19 @@ const Products = () => {
             role="status"
           >
             {exportFeedback.message}
+          </div>
+        )}
+
+        {newCategoryFeedback && (
+          <div
+            className={
+              newCategoryFeedback.ok
+                ? 'products-alert products-alert--success'
+                : 'products-alert products-alert--error'
+            }
+            role="status"
+          >
+            {newCategoryFeedback.message}
           </div>
         )}
 
@@ -816,6 +841,18 @@ const Products = () => {
             </div>
           </div>
         )}
+
+        <NewCategoryPathDialog
+          open={newCategoryOpen}
+          onClose={() => setNewCategoryOpen(false)}
+          onCreated={(categoryPath) => {
+            setNewCategoryFeedback({
+              ok: true,
+              message: `Category created: ${categoryPath}`,
+            });
+            window.setTimeout(() => setNewCategoryFeedback(null), 8000);
+          }}
+        />
 
         {editModal != null && (
           <div

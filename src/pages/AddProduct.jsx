@@ -85,8 +85,9 @@ function AddProduct() {
           <h2 className="products-main-title">Add product</h2>
           <p className="products-subtitle">
             Pick a category by browsing or search. Products attach to a{' '}
-            <span className="products-add-em">leaf</span> category (no subcategories). You can
-            add a new category if it does not exist yet.
+            <span className="products-add-em">leaf</span> tag. To add a new category (main + two
+            sub-levels), use <span className="products-add-em">New category</span> on the Product
+            catalog page first, then return here to pick it.
           </p>
         </header>
 

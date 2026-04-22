@@ -219,6 +219,30 @@
   filter: brightness(1.06);
 }
 
+.products-toolbar-new-category {
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--products-border);
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--products-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.products-toolbar-new-category:hover {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: var(--products-accent);
+  color: var(--products-accent);
+}
+
 .products-toolbar-export {
   padding: 0.35rem 0.65rem;
   border-radius: 8px;
@@ -982,62 +1006,23 @@
   color: var(--products-accent);
 }
 
-.products-category-new {
-  margin: 0;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--products-border);
+.products-category-dotted-path {
+  font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Menlo, Consolas, monospace;
+  font-size: 0.9em;
 }
 
-.products-category-new-field {
-  margin-bottom: 0;
+.products-new-category-err {
+  margin: 0 0 0.75rem;
 }
 
-.products-category-new-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
+.products-new-category-hint {
+  margin: 0 0 0.5rem;
 }
 
-.products-category-new-row input {
-  flex: 1;
-  min-width: 10rem;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border: 1px solid var(--products-border);
-  border-radius: 8px;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-  font-size: 0.9375rem;
-}
-
-.products-category-new-row button {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--products-border);
-  background: var(--products-surface);
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
+.products-new-category-path-preview {
+  margin: 0.5rem 0 0;
   font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.products-category-new-row button:hover:not(:disabled) {
-  border-color: var(--products-accent);
-  color: var(--products-accent);
-}
-
-.products-category-new-row button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+  color: var(--products-text-muted);
 }
 
 .products-add-actions {

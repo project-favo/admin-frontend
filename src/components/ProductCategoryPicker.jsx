@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  createTag,
   fetchTagChildren,
   fetchTagRoots,
   messageFromFailedResponse,
@@ -26,8 +25,6 @@ export default function ProductCategoryPicker({ value, onChange, disabled = fals
   const [searchInput, setSearchInput] = useState('');
   const [searchResults, setSearchResults] = useState(/** @type {TagRef[]} */ ([]));
   const [searchLoading, setSearchLoading] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [creating, setCreating] = useState(false);
   const searchAbortRef = useRef(null);
 
   const loadRoots = useCallback(async () => {
@@ -85,10 +82,6 @@ export default function ProductCategoryPicker({ value, onChange, disabled = fals
     // Intentionally once on mount — avoid resetting navigation when callbacks change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const refetchCurrentLevel = useCallback(async () => {
-    await applyStack(stack);
-  }, [applyStack, stack]);
 
   const goBreadcrumb = (index) => {
     if (disabled) return;
@@ -198,48 +191,6 @@ export default function ProductCategoryPicker({ value, onChange, disabled = fals
     return () => window.clearTimeout(t);
   }, [searchInput]);
 
-  const parentIdForNew =
-    stack.length === 0 ? null : stack[stack.length - 1].id;
-
-  /** Must not use a nested <form> — Add Product wraps this picker in its own form. */
-  const createCategory = async () => {
-    const name = newCategoryName.trim();
-    if (!name || disabled || creating) return;
-    setCreating(true);
-    setPickerError(null);
-    try {
-      const res = await createTag({ name, parentId: parentIdForNew });
-      if (!res.ok) {
-        const msg = await messageFromFailedResponse(res);
-        throw new Error(msg || `Could not create category (${res.status})`);
-      }
-      const created = await res.json();
-      const id = created?.id;
-      if (id == null) {
-        await refetchCurrentLevel();
-        setNewCategoryName('');
-        return;
-      }
-      const check = await fetchTagChildren(id);
-      if (check.ok) {
-        const data = await check.json();
-        if (data.isLeaf === true) {
-          onChange({
-            id: data.id,
-            name: data.name,
-            categoryPath: data.categoryPath,
-          });
-        }
-      }
-      await refetchCurrentLevel();
-      setNewCategoryName('');
-    } catch (err) {
-      setPickerError(err instanceof Error ? err.message : 'Create failed.');
-    } finally {
-      setCreating(false);
-    }
-  };
-
   const leafSummary =
     value && value.categoryPath
       ? value.categoryPath
@@ -323,8 +274,9 @@ export default function ProductCategoryPicker({ value, onChange, disabled = fals
           </p>
         ) : currentTags.length === 0 ? (
           <p className="products-category-hint">
-            No subcategories here. Use “Add category” below or go back and pick a branch that has
-            subcategories until you reach a leaf.
+            No subcategories here. On the Product catalog (toolbar: New category), add a main
+            category plus two subcategory levels, or go back and pick a branch with subcategories until
+            you reach a leaf.
           </p>
         ) : (
           <ul className="products-category-list" role="list">
@@ -361,47 +313,6 @@ export default function ProductCategoryPicker({ value, onChange, disabled = fals
           </button>
         </div>
       )}
-
-      <div
-        className="products-category-new"
-        role="group"
-        aria-label={parentIdForNew == null ? 'New root category' : 'New subcategory'}
-      >
-        <div className="products-modal-field products-category-new-field">
-          <label htmlFor="product-new-category-name">
-            {parentIdForNew == null ? 'New root category' : 'New subcategory'}
-          </label>
-          <div className="products-category-new-row">
-            <input
-              id="product-new-category-name"
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key !== 'Enter') return;
-                e.preventDefault();
-                void createCategory();
-              }}
-              disabled={disabled || creating}
-              placeholder={
-                parentIdForNew == null ? 'e.g. Electronics' : 'e.g. Smartphones'
-              }
-              autoComplete="off"
-            />
-            <button
-              type="button"
-              disabled={disabled || creating || !newCategoryName.trim()}
-              onClick={() => void createCategory()}
-            >
-              {creating ? 'Adding…' : 'Add category'}
-            </button>
-          </div>
-          <p className="products-category-hint">
-            {parentIdForNew == null
-              ? 'Creates a top-level tag (POST /api/tags). New tags are usually leaf until you add children.'
-              : `Will be created under “${stack[stack.length - 1]?.name}”.`}
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

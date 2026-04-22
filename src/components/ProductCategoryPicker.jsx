@@ -201,8 +201,8 @@ export default function ProductCategoryPicker({ value, onChange, disabled = fals
   const parentIdForNew =
     stack.length === 0 ? null : stack[stack.length - 1].id;
 
-  const handleCreateCategory = async (e) => {
-    e.preventDefault();
+  /** Must not use a nested <form> — Add Product wraps this picker in its own form. */
+  const createCategory = async () => {
     const name = newCategoryName.trim();
     if (!name || disabled || creating) return;
     setCreating(true);
@@ -362,7 +362,11 @@ export default function ProductCategoryPicker({ value, onChange, disabled = fals
         </div>
       )}
 
-      <form className="products-category-new" onSubmit={handleCreateCategory}>
+      <div
+        className="products-category-new"
+        role="group"
+        aria-label={parentIdForNew == null ? 'New root category' : 'New subcategory'}
+      >
         <div className="products-modal-field products-category-new-field">
           <label htmlFor="product-new-category-name">
             {parentIdForNew == null ? 'New root category' : 'New subcategory'}
@@ -372,13 +376,22 @@ export default function ProductCategoryPicker({ value, onChange, disabled = fals
               id="product-new-category-name"
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                void createCategory();
+              }}
               disabled={disabled || creating}
               placeholder={
                 parentIdForNew == null ? 'e.g. Electronics' : 'e.g. Smartphones'
               }
               autoComplete="off"
             />
-            <button type="submit" disabled={disabled || creating || !newCategoryName.trim()}>
+            <button
+              type="button"
+              disabled={disabled || creating || !newCategoryName.trim()}
+              onClick={() => void createCategory()}
+            >
               {creating ? 'Adding…' : 'Add category'}
             </button>
           </div>
@@ -388,7 +401,7 @@ export default function ProductCategoryPicker({ value, onChange, disabled = fals
               : `Will be created under “${stack[stack.length - 1]?.name}”.`}
           </p>
         </div>
-      </form>
+      </div>
     </div>
   );
 }

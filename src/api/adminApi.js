@@ -61,6 +61,39 @@ export function normalizeAdminPageDto(dto) {
 }
 
 /**
+ * Sunucu cevabındaki `size` istenenden küçükse (max page size) sayfa adedini
+ * `content.length < requestSize` ile tespit etmek tüm listeyi kaçırır; önce
+ * totalElements / totalPages kullan.
+ * @param {ReturnType<typeof normalizeAdminPageDto>} n
+ * @param {number} loopPage
+ * @param {number} requestSize
+ * @param {number} totalCountAfterPush
+ * @returns {boolean}
+ */
+function shouldEndAdminListFetch(n, loopPage, requestSize, totalCountAfterPush) {
+  const { content, totalElements, totalPages, number: nFromDto } = n;
+  if (content.length === 0) return true;
+  const current = typeof nFromDto === 'number' && Number.isFinite(nFromDto) ? nFromDto : loopPage;
+  if (
+    typeof totalElements === 'number' &&
+    Number.isFinite(totalElements) &&
+    totalCountAfterPush >= totalElements
+  ) {
+    return true;
+  }
+  if (typeof totalPages === 'number' && Number.isFinite(totalPages) && totalPages > 0) {
+    if (current + 1 >= totalPages) return true;
+  }
+  if (typeof totalElements === 'number' && Number.isFinite(totalElements) && totalCountAfterPush < totalElements) {
+    return false;
+  }
+  if (typeof totalPages === 'number' && Number.isFinite(totalPages) && totalPages > 0) {
+    return false;
+  }
+  return content.length < requestSize;
+}
+
+/**
  * GET /api/admin/users?page=&size=&activeOnly=&inactiveOnly=
  * - inactiveOnly=true → yalnızca askıya alınmış (isActive=false) kullanıcılar; backend’de AdminService + repository desteği gerekir.
  */
@@ -107,11 +140,9 @@ export async function fetchAllAdminUsers({
     const dto = await res.json();
     const normalized = normalizeAdminPageDto(dto);
     const content = normalized.content;
-    all.push(...content);
-    const tp = normalized.totalPages ?? dto?.totalPages ?? dto?.total_pages ?? dto?.page?.totalPages;
     if (content.length === 0) break;
-    if (typeof tp === 'number' && Number.isFinite(tp) && page + 1 >= tp) break;
-    if (content.length < pageSize) break;
+    all.push(...content);
+    if (shouldEndAdminListFetch(normalized, page, pageSize, all.length)) break;
     page += 1;
   }
   return all;
@@ -247,11 +278,9 @@ export async function fetchAllAdminReviews({
     const dto = await res.json();
     const normalized = normalizeAdminPageDto(dto);
     const content = normalized.content;
-    all.push(...content);
-    const tp = normalized.totalPages ?? dto?.totalPages ?? dto?.total_pages ?? dto?.page?.totalPages;
     if (content.length === 0) break;
-    if (typeof tp === 'number' && Number.isFinite(tp) && page + 1 >= tp) break;
-    if (content.length < pageSize) break;
+    all.push(...content);
+    if (shouldEndAdminListFetch(normalized, page, pageSize, all.length)) break;
     page += 1;
   }
   return all;
@@ -358,11 +387,9 @@ export async function fetchAllAdminProducts({
     const dto = await res.json();
     const normalized = normalizeAdminPageDto(dto);
     const content = normalized.content;
-    all.push(...content);
-    const tp = normalized.totalPages ?? dto?.totalPages ?? dto?.total_pages ?? dto?.page?.totalPages;
     if (content.length === 0) break;
-    if (typeof tp === 'number' && Number.isFinite(tp) && page + 1 >= tp) break;
-    if (content.length < pageSize) break;
+    all.push(...content);
+    if (shouldEndAdminListFetch(normalized, page, pageSize, all.length)) break;
     page += 1;
   }
   return all;

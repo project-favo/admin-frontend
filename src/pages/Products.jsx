@@ -52,6 +52,61 @@ function statusLabelFromProductKind(kind) {
 }
 
 const PRODUCTS_POLL_MS = 5000;
+const PRODUCTS_NAME_SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * I / İ (TR) gibi farklar için; Unicode NFC ile birleşik formlar eşleşir.
+ * @param {string} s
+ */
+function foldForNameSearch(s) {
+  if (s == null) return '';
+  return String(s)
+    .normalize('NFC')
+    .toLocaleLowerCase('tr-TR');
+}
+
+/**
+ * DTO farklı alanlarda isim tutabildiği için arama tüm adaylarda.
+ * @param {unknown} p
+ */
+function productNameSearchBlob(p) {
+  if (p == null || typeof p !== 'object') return '';
+  return [
+    p.name,
+    p.title,
+    p.productName,
+    p.product_name,
+  ]
+    .filter((x) => x != null && String(x).trim() !== '')
+    .map((x) => String(x))
+    .join(' ');
+}
+
+/**
+ * Tabloda gösterim — öncelik sırayla ilk dolu isim.
+ * @param {unknown} p
+ */
+function productTableDisplayName(p) {
+  if (p == null || typeof p !== 'object') return '—';
+  const pick = p.name ?? p.title ?? p.productName ?? p.product_name;
+  if (pick == null || String(pick).trim() === '') return '—';
+  return String(pick);
+}
+
+/**
+ * @param {string} q
+ * @param {ReturnType<typeof mapProductDtoToRow>[]} rows
+ */
+function filterRowsByNameQuery(q, rows) {
+  const needle = foldForNameSearch(q.trim());
+  if (needle === '') return rows;
+  return rows.filter((r) => {
+    const hay = r._nameSearchBlob
+      ? foldForNameSearch(r._nameSearchBlob)
+      : foldForNameSearch(r.name);
+    return hay.includes(needle);
+  });
+}
 
 function mapProductDtoToRow(p, page, idx) {
   const idRaw = p?.id ?? `${page}-${idx}`;
@@ -63,7 +118,8 @@ function mapProductDtoToRow(p, page, idx) {
   const statusKind = toProductStatusKind(p);
   return {
     id: String(idRaw),
-    name: p?.name != null ? String(p.name) : '—',
+    name: productTableDisplayName(p),
+    _nameSearchBlob: productNameSearchBlob(p),
     category: toCategoryLabel(p),
     statusKind,
     statusLabel: statusLabelFromProductKind(statusKind),
@@ -74,12 +130,6 @@ function mapProductDtoToRow(p, page, idx) {
 function mapAdminProductsDtoToRows(dto, page) {
   const { content } = normalizeAdminPageDto(dto);
   return content.map((p, idx) => mapProductDtoToRow(p, page, idx));
-}
-
-/** @param {{ name: string }} row */
-function productRowMatchesQuery(row, qLower) {
-  if (!qLower) return true;
-  return String(row.name).toLowerCase().includes(qLower);
 }
 
 function readProductPageMeta(dto) {
@@ -188,6 +238,9 @@ const Products = () => {
   const location = useLocation();
   const [page, setPage] = useState(0);
   const [size] = useState(() => getTablePageSize());
+  const [nameQuery, setNameQuery] = useState('');
+  /** Tüm sorguyla eşleşen satırlar (sadece arama modu; yokta sunucu sayfalaması kullanılır). */
+  const [nameSearchFull, setNameSearchFull] = useState(/** @type {null | ReturnType<typeof mapProductDtoToRow>[]} */(null));
   const [filter, setFilter] = useState('all'); // 'all' | 'active'
   const [rows, setRows] = useState([]);
   const [totalElements, setTotalElements] = useState(null);
@@ -212,15 +265,10 @@ const Products = () => {
     /** @type {null | { ok: boolean, message: string }} */
     (null)
   );
-  const [searchInput, setSearchInput] = useState('');
-  const [listRefreshKey, setListRefreshKey] = useState(0);
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [newCategoryFeedback, setNewCategoryFeedback] = useState(
     /** @type {null | { ok: boolean, message: string }} */ (null)
   );
-
-  const searchTrim = useMemo(() => searchInput.trim().toLowerCase(), [searchInput]);
-  const isSearchActive = searchTrim.length > 0;
 
   /** After creating a product: refetch list and open the page that contains the new row (often last page). */
   useEffect(() => {
@@ -230,10 +278,9 @@ const Products = () => {
     const newId = st.newProductId;
     navigate(location.pathname, { replace: true, state: {} });
 
-    setSearchInput('');
     setFilter('all');
+    setNameQuery('');
     setPollTick((n) => n + 1);
-    setListRefreshKey((k) => k + 1);
 
     if (newId == null) {
       setPage(0);
@@ -272,51 +319,72 @@ const Products = () => {
   }, [location.pathname, location.state, navigate, size]);
 
   const refreshCurrentPage = useCallback(async () => {
-    if (isSearchActive) {
-      setListRefreshKey((k) => k + 1);
-      return;
+    const q = nameQuery.trim();
+    if (q) {
+      const res = await fetchAllAdminProducts({
+        activeOnly: filter === 'active',
+      });
+      const all = res.map((p, idx) => mapProductDtoToRow(p, 0, idx));
+      const filtered = filterRowsByNameQuery(q, all);
+      setNameSearchFull(filtered);
+      const tp = filtered.length === 0 ? 0 : Math.ceil(filtered.length / size);
+      const maxPage = tp > 0 ? tp - 1 : 0;
+      const p = Math.min(page, maxPage);
+      setTotalElements(filtered.length);
+      setTotalPages(tp);
+      setRows(filtered.slice(p * size, p * size + size));
+      if (p !== page) setPage(p);
+    } else {
+      setNameSearchFull(null);
+      const res = await listAdminProducts({
+        page,
+        size,
+        activeOnly: filter === 'active',
+      });
+      if (!res.ok) {
+        throw new Error(`Request failed (${res.status})`);
+      }
+      const dto = await res.json();
+      setRows(mapAdminProductsDtoToRows(dto, page));
+      const meta = readProductPageMeta(dto);
+      setTotalElements(meta.totalElements);
+      setTotalPages(meta.totalPages);
     }
-    const res = await listAdminProducts({
-      page,
-      size,
-      activeOnly: filter === 'active',
-    });
-    if (!res.ok) {
-      throw new Error(`Request failed (${res.status})`);
-    }
-    const dto = await res.json();
-    setRows(mapAdminProductsDtoToRows(dto, page));
-    const meta = readProductPageMeta(dto);
-    setTotalElements(meta.totalElements);
-    setTotalPages(meta.totalPages);
-  }, [page, size, filter, isSearchActive]);
+  }, [page, size, filter, nameQuery]);
 
   useEffect(() => {
     const t = window.setInterval(() => {
+      if (nameQuery.trim() !== '') return;
       pollSilentRef.current = true;
       setPollTick((n) => n + 1);
     }, PRODUCTS_POLL_MS);
     return () => window.clearInterval(t);
-  }, []);
+  }, [nameQuery]);
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && nameQuery.trim() === '') {
         pollSilentRef.current = true;
         setPollTick((n) => n + 1);
       }
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
-  }, []);
+  }, [nameQuery]);
 
   useEffect(() => {
+    if (nameQuery.trim() === '') {
+      setNameSearchFull(null);
+    }
+  }, [nameQuery]);
+
+  useEffect(() => {
+    if (nameQuery.trim() !== '') return undefined;
+
     let cancelled = false;
     const controller = new AbortController();
     const silent = pollSilentRef.current;
     pollSilentRef.current = false;
-
-    if (isSearchActive) return;
 
     if (!silent) {
       setLoading(true);
@@ -357,53 +425,65 @@ const Products = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [page, size, filter, pollTick, isSearchActive]);
+  }, [page, size, filter, pollTick, nameQuery]);
 
   useEffect(() => {
-    if (!isSearchActive) return;
+    if (nameQuery.trim() === '') return;
+
     let cancelled = false;
     const controller = new AbortController();
+    const t = window.setTimeout(() => {
+      if (!nameQuery.trim()) return;
+      setLoading(true);
+      setPage(0);
+      setError(null);
+      const q = nameQuery.trim();
+      (async () => {
+        try {
+          const res = await fetchAllAdminProducts({
+            activeOnly: filter === 'active',
+            signal: controller.signal,
+          });
+          if (cancelled) return;
+          if (q !== nameQuery.trim()) return;
+          const all = res.map((p, idx) => mapProductDtoToRow(p, 0, idx));
+          const filtered = filterRowsByNameQuery(q, all);
+          setNameSearchFull(filtered);
+          setError(null);
+        } catch (e) {
+          if (cancelled) return;
+          if (e && typeof e === 'object' && 'name' in e && e.name === 'AbortError') return;
+          setNameSearchFull(null);
+          setRows([]);
+          setTotalElements(null);
+          setTotalPages(null);
+          setError(e instanceof Error ? e.message : 'Unknown error');
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+    }, PRODUCTS_NAME_SEARCH_DEBOUNCE_MS);
 
-    setLoading(true);
-    setError(null);
-
-    (async () => {
-      try {
-        const dtos = await fetchAllAdminProducts({
-          activeOnly: filter === 'active',
-          signal: controller.signal,
-        });
-        if (cancelled) return;
-        const allRows = dtos.map((p, idx) => mapProductDtoToRow(p, 0, idx));
-        const filtered = allRows.filter((row) => productRowMatchesQuery(row, searchTrim));
-        const n = filtered.length;
-        const tp = n === 0 ? 0 : Math.ceil(n / size);
-        const slice = filtered.slice(page * size, page * size + size);
-        if (cancelled) return;
-        setError(null);
-        setRows(slice);
-        setTotalElements(n);
-        setTotalPages(tp);
-      } catch (e) {
-        if (cancelled) return;
-        if (e && typeof e === 'object' && 'name' in e && e.name === 'AbortError') return;
-        setRows([]);
-        setTotalElements(null);
-        setTotalPages(null);
-        setError(e instanceof Error ? e.message : 'Unknown error');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
     return () => {
       cancelled = true;
       controller.abort();
+      window.clearTimeout(t);
     };
-  }, [filter, page, size, listRefreshKey, searchTrim, isSearchActive]);
+  }, [nameQuery, filter]);
 
   useEffect(() => {
-    setPage(0);
-  }, [searchTrim]);
+    if (nameQuery.trim() === '' || nameSearchFull == null) return;
+    setTotalElements(nameSearchFull.length);
+    const tp = nameSearchFull.length === 0 ? 0 : Math.ceil(nameSearchFull.length / size);
+    setTotalPages(tp);
+    const maxPage = tp > 0 ? tp - 1 : 0;
+    const p = page > maxPage ? maxPage : page;
+    if (p !== page) {
+      setPage(p);
+      return;
+    }
+    setRows(nameSearchFull.slice(p * size, p * size + size));
+  }, [nameQuery, page, size, nameSearchFull]);
 
   const handleView = async (id) => {
     setViewModal({ status: 'loading' });
@@ -551,20 +631,20 @@ const Products = () => {
       const dtos = await fetchAllAdminProducts({
         activeOnly: filter === 'active',
       });
-      let rows = dtos.map((p, idx) => mapProductDtoToRow(p, 0, idx));
-      if (isSearchActive) {
-        rows = rows.filter((r) => productRowMatchesQuery(r, searchTrim));
+      let rowData = dtos.map((p, idx) => mapProductDtoToRow(p, 0, idx));
+      if (nameQuery.trim()) {
+        rowData = filterRowsByNameQuery(nameQuery, rowData);
       }
-      const filterLabel = filter === 'active' ? 'Active only' : 'All products';
-      const searchSuffix = isSearchActive ? ` · Search: "${searchInput.trim()}"` : '';
+      const filterLabel = filter === 'all' ? 'All products' : 'Active only';
+      const nameNote = nameQuery.trim() ? ` · name contains “${nameQuery.trim()}”` : '';
       downloadProductsPdf({
-        rows: rows.map(({ id, name, category, statusLabel }) => ({
+        rows: rowData.map(({ id, name, category, statusLabel }) => ({
           id,
           name,
           category,
           statusLabel,
         })),
-        filterLabel: `${filterLabel}${searchSuffix}`,
+        filterLabel: `${filterLabel}${nameNote}`,
       });
       setExportFeedback({ ok: true, message: 'PDF downloaded.' });
     } catch (e) {
@@ -643,13 +723,17 @@ const Products = () => {
           </div>
           <div className="products-toolbar-search">
             <input
+              id="products-name-search"
               type="search"
               className="products-toolbar-search-input"
-              placeholder="Search by product name"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              aria-label="Search products by name"
+              value={nameQuery}
+              onChange={(e) => setNameQuery(e.target.value)}
+              placeholder="Search by product name…"
               autoComplete="off"
+              autoCorrect="off"
+              spellCheck="false"
+              enterKeyHint="search"
+              aria-label="Search by product name"
             />
           </div>
           <div className="products-toolbar-actions">
@@ -726,8 +810,8 @@ const Products = () => {
           <div className="products-empty" role="status">
             <p className="products-empty-title">No products to show</p>
             <p className="products-empty-hint">
-              {isSearchActive
-                ? 'No products match this search. Try different keywords.'
+              {nameQuery.trim()
+                ? 'No product names match your search. Try a shorter or different term.'
                 : filter === 'active'
                   ? 'There are no active listings matching this filter.'
                   : 'No product records were returned for this page.'}

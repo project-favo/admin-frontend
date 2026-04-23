@@ -199,18 +199,23 @@ export async function listProducts({ signal } = {}) {
  * Kategori ağacı — root tag’ler (parent yok).
  * GET /api/tags/roots — Bearer gerekir (backend).
  */
-export async function fetchTagRoots({ signal } = {}) {
-  return apiFetch('/api/tags/roots', { method: 'GET', signal });
+export async function fetchTagRoots({ signal, forceIdTokenRefresh } = {}) {
+  return apiFetch('/api/tags/roots', {
+    method: 'GET',
+    signal,
+    forceIdTokenRefresh: forceIdTokenRefresh === true,
+  });
 }
 
 /**
  * Bir tag’in alt öğeleri veya leaf ise ürün listesi.
  * GET /api/tags/{id}/children
  */
-export async function fetchTagChildren(id, { signal } = {}) {
+export async function fetchTagChildren(id, { signal, forceIdTokenRefresh } = {}) {
   return apiFetch(`/api/tags/${encodeURIComponent(String(id))}/children`, {
     method: 'GET',
     signal,
+    forceIdTokenRefresh: forceIdTokenRefresh === true,
   });
 }
 
@@ -230,12 +235,13 @@ export async function searchTags(name, { signal } = {}) {
  * Yeni tag — POST /api/tags — Bearer gerekir.
  * Body: { name: string, parentId: number | null }
  */
-export async function createTag(body, { signal } = {}) {
+export async function createTag(body, { signal, forceIdTokenRefresh } = {}) {
   return apiFetch('/api/tags', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body ?? {}),
     signal,
+    forceIdTokenRefresh: forceIdTokenRefresh === true,
   });
 }
 
@@ -420,6 +426,185 @@ export async function messageFromFailedResponse(res) {
   } catch {
     return text;
   }
+}
+
+/**
+ * @param {string} s
+ * @returns {string}
+ */
+function tagNameKey(s) {
+  return String(s ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * @param {unknown[]} list
+ * @param {string} name
+ * @returns {{ id: unknown, name?: string, categoryPath?: string } | null}
+ */
+function findTagInListByName(list, name) {
+  const want = tagNameKey(name);
+  if (!want) return null;
+  for (const t of list) {
+    if (t && typeof t === 'object' && t.id != null && tagNameKey(t.name) === want) {
+      return /** @type {{ id: unknown, name?: string, categoryPath?: string }} */ (t);
+    }
+  }
+  return null;
+}
+
+/**
+ * Aynı üst kategori altındaki alt seviyeler; leaf ise boş dizi.
+ * @param {string | number} parentId
+ * @param {AbortSignal | undefined} signal
+ * @param {boolean} [fresh]
+ */
+async function listChildTagsForParent(parentId, signal, fresh) {
+  const res = await fetchTagChildren(parentId, {
+    signal,
+    forceIdTokenRefresh: fresh === true,
+  });
+  if (!res.ok) {
+    const msg = await messageFromFailedResponse(res);
+    throw new Error(msg || `Could not load subcategories (${res.status})`);
+  }
+  const data = await res.json();
+  if (data.isLeaf === true) {
+    return /** @type {unknown[]} */ ([]);
+  }
+  return Array.isArray(data.children) ? data.children : [];
+}
+
+/**
+ * Mevcut hiyerarşide aynı isim varsa (büyük/küçük harf duyarsız) o düğümün id’sini verir, yoksa yeni tag oluşturur.
+ * @param {{ parentId: null | string | number, name: string, labelForCreate: string, signal?: AbortSignal, fresh?: boolean }} p
+ * @returns {Promise<number | string>}
+ */
+async function findOrCreateChildTagName({
+  parentId,
+  name,
+  labelForCreate,
+  signal,
+  fresh = true,
+} = /** @type {any} */ ({})) {
+  const useFresh = fresh === true;
+  const n = String(name).trim();
+  if (!n) {
+    throw new Error('Each category segment (main, 1st sub, 2nd sub) must be non-empty.');
+  }
+  const toCreate = String(labelForCreate ?? n).trim();
+  if (!toCreate) {
+    throw new Error('Each category segment (main, 1st sub, 2nd sub) must be non-empty.');
+  }
+
+  if (parentId == null) {
+    const res = await fetchTagRoots({ signal, forceIdTokenRefresh: useFresh });
+    if (!res.ok) {
+      const msg = await messageFromFailedResponse(res);
+      throw new Error(msg || `Could not load root categories (${res.status})`);
+    }
+    const roots = await res.json();
+    const list = Array.isArray(roots) ? roots : [];
+    const hit = findTagInListByName(list, n);
+    if (hit && hit.id != null) {
+      return hit.id;
+    }
+  } else {
+    const list = await listChildTagsForParent(parentId, signal, useFresh);
+    const hit = findTagInListByName(list, n);
+    if (hit && hit.id != null) {
+      return hit.id;
+    }
+  }
+
+  const res = await createTag(
+    { name: toCreate, parentId: parentId == null ? null : parentId },
+    { signal, forceIdTokenRefresh: useFresh }
+  );
+  if (!res.ok) {
+    const msg = await messageFromFailedResponse(res);
+    throw new Error(
+      msg ||
+        `Could not create category “${toCreate}”${
+          parentId == null ? ' (root)' : ''
+        } (${res.status})`
+    );
+  }
+  const data = await res.json();
+  const newId = data?.id;
+  if (newId == null) {
+    throw new Error('Create category: missing id in response.');
+  }
+  return newId;
+}
+
+/**
+ * 3 seviyelik yol (ana + 2 alt) — zaten var olan halkaları (ör. fashion, men) yeniden oluşturmaz;
+ * sadece eksik segmentleri kapatır. Böylece fashion.men.shoes sonrası fashion.men.tshirt aynı kök+arda kullanılabilir.
+ * @param {{ main: string, sub1: string, sub2: string, signal?: AbortSignal }} p
+ * @returns {Promise<{ id: number, name: string, categoryPath: string }>}
+ */
+export async function createThreeLevelTagPath(
+  { main, sub1, sub2, signal } = /** @type {any} */ ({})
+) {
+  const root = String(main ?? '').trim();
+  const a = String(sub1 ?? '').trim();
+  const b = String(sub2 ?? '').trim();
+  if (!root || !a || !b) {
+    throw new Error('Main, 1st subcategory, and 2nd subcategory are all required.');
+  }
+  const FRESH = true;
+  const idRoot = await findOrCreateChildTagName({
+    parentId: null,
+    name: root,
+    labelForCreate: root,
+    signal,
+    fresh: FRESH,
+  });
+  const id1 = await findOrCreateChildTagName({
+    parentId: idRoot,
+    name: a,
+    labelForCreate: a,
+    signal,
+    fresh: FRESH,
+  });
+  const id2 = await findOrCreateChildTagName({
+    parentId: id1,
+    name: b,
+    labelForCreate: b,
+    signal,
+    fresh: FRESH,
+  });
+
+  const check = await fetchTagChildren(id2, { signal, forceIdTokenRefresh: FRESH });
+  if (!check.ok) {
+    const msg = await messageFromFailedResponse(check);
+    throw new Error(
+      msg || 'Categories were set up but could not load the new leaf tag.'
+    );
+  }
+  const node = await check.json();
+  const hasChildren = Array.isArray(node?.children) && node.children.length > 0;
+  const isLeaf =
+    node.isLeaf === true ||
+    node.isLeaf === 'true' ||
+    (node.isLeaf == null && !hasChildren);
+  if (!isLeaf) {
+    throw new Error(
+      'The path is ready, but the last level is not a leaf; pick it from the category list.'
+    );
+  }
+  const leafId = node.id != null ? node.id : id2;
+  const categoryPath =
+    node.categoryPath != null
+      ? String(node.categoryPath)
+      : [root, a, b].join('.');
+  return {
+    id: Number(leafId),
+    name: node.name != null ? String(node.name) : b,
+    categoryPath,
+  };
 }
 
 /**

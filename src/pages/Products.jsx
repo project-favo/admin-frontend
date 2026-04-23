@@ -1,5 +1,6 @@
 import '../styles/Products.css';
 import NewCategoryPathDialog from '../components/NewCategoryPathDialog';
+import ProductCategoryPicker from '../components/ProductCategoryPicker';
 import ProductTable from '../components/ProductTable';
 import TablePagination from '../components/TablePagination';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -254,7 +255,7 @@ const Products = () => {
     (null)
   );
   const [editModal, setEditModal] = useState(
-    /** @type {null | { status: 'loading' } | { status: 'ok', id: string, name: string, description: string, imageURL: string, tagId: string } | { status: 'err', message: string }} */
+    /** @type {null | { status: 'loading' } | { status: 'ok', id: string, name: string, description: string, imageURL: string, selectedCategory: null | { id: number, name: string, categoryPath?: string } } | { status: 'err', message: string }} */
     (null)
   );
   const [editSaving, setEditSaving] = useState(false);
@@ -510,10 +511,17 @@ const Products = () => {
         throw new Error(`Request failed (${res.status})`);
       }
       const p = await res.json();
-      const tagId =
-        p?.tag && typeof p.tag === 'object' && p.tag.id != null
-          ? String(p.tag.id)
-          : '';
+      const tag = p?.tag;
+      const tagIdNum = tag && typeof tag === 'object' && tag.id != null ? Number(tag.id) : NaN;
+      const selectedCategory =
+        tag && typeof tag === 'object' && tag.id != null && Number.isFinite(tagIdNum)
+          ? {
+              id: tagIdNum,
+              name: tag.name != null ? String(tag.name) : '',
+              categoryPath:
+                tag.categoryPath != null ? String(tag.categoryPath) : undefined,
+            }
+          : null;
       const img = p?.imageURL ?? p?.imageUrl ?? p?.image_url;
       setEditModal({
         status: 'ok',
@@ -521,7 +529,7 @@ const Products = () => {
         name: p?.name != null ? String(p.name) : '',
         description: p?.description != null ? String(p.description) : '',
         imageURL: img != null ? String(img) : '',
-        tagId,
+        selectedCategory,
       });
     } catch (e) {
       setEditModal({
@@ -540,6 +548,10 @@ const Products = () => {
 
   const handleEditSave = async () => {
     if (!editModal || editModal.status !== 'ok') return;
+    if (!editModal.selectedCategory) {
+      setActionError('Choose a leaf category (search or browse until a category is selected).');
+      return;
+    }
     setEditSaving(true);
     setActionError(null);
     try {
@@ -547,7 +559,7 @@ const Products = () => {
         name: editModal.name,
         description: editModal.description,
         imageURL: editModal.imageURL,
-        tagId: editModal.tagId,
+        tagId: String(editModal.selectedCategory.id),
       });
 
       const res = await putProduct(editModal.id, body);
@@ -992,23 +1004,22 @@ const Products = () => {
                       />
                     </div>
                     <div className="products-modal-field products-modal-field--last">
-                      <label htmlFor="product-edit-tag">Leaf tag ID</label>
-                      <input
-                        id="product-edit-tag"
-                        className="products-modal-input-readonly"
-                        value={editModal.tagId}
-                        readOnly
-                        aria-readonly="true"
-                        aria-describedby="product-edit-tag-hint"
-                        title="Category (leaf tag) cannot be changed when editing"
-                        disabled={editSaving}
-                        inputMode="numeric"
-                        autoComplete="off"
-                      />
-                      <p className="products-modal-field-hint" id="product-edit-tag-hint">
-                        Category is fixed for this listing. To use another category, add a new
-                        product.
-                      </p>
+                      <span className="products-category-section-label" id="product-edit-category-label">
+                        Change category
+                      </span>
+                      <div aria-labelledby="product-edit-category-label">
+                        <ProductCategoryPicker
+                          key={String(editModal.id)}
+                          value={editModal.selectedCategory}
+                          onChange={(next) => {
+                            setEditModal((prev) => {
+                              if (!prev || prev.status !== 'ok') return prev;
+                              return { ...prev, selectedCategory: next };
+                            });
+                          }}
+                          disabled={editSaving}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

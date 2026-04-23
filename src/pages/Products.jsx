@@ -842,18 +842,6 @@ const Products = () => {
           </div>
         )}
 
-        <NewCategoryPathDialog
-          open={newCategoryOpen}
-          onClose={() => setNewCategoryOpen(false)}
-          onCreated={(categoryPath) => {
-            setNewCategoryFeedback({
-              ok: true,
-              message: `Category created: ${categoryPath}`,
-            });
-            window.setTimeout(() => setNewCategoryFeedback(null), 8000);
-          }}
-        />
-
         {editModal != null && (
           <div
             className="products-modal-backdrop"
@@ -964,6 +952,18 @@ const Products = () => {
             </div>
           </div>
         )}
+
+        <NewCategoryPathDialog
+          open={newCategoryOpen}
+          onClose={() => setNewCategoryOpen(false)}
+          onCreated={({ categoryPath }) => {
+            setNewCategoryFeedback({
+              ok: true,
+              message: `Category created: ${categoryPath}`,
+            });
+            window.setTimeout(() => setNewCategoryFeedback(null), 8000);
+          }}
+        />
       </div>
     </div>
   );

@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
-import {
-  createTag,
-  fetchTagChildren,
-  messageFromFailedResponse,
-} from '../api/adminApi';
+import { createThreeLevelTagPath } from '../api/adminApi';
 
 /**
- * @param {{ open: boolean, onClose: () => void, onCreated?: (categoryPath: string) => void }} props
+ * Eski Add product kategori bölümüyle aynı: `createThreeLevelTagPath` (3× tag + yaprak).
+ *
+ * @param {{ open: boolean, onClose: () => void, onCreated?: (result: { categoryPath: string, id: number, name: string }) => void }} props
  */
 export default function NewCategoryPathDialog({ open, onClose, onCreated }) {
   const [pathRoot, setPathRoot] = useState('');
@@ -42,46 +40,8 @@ export default function NewCategoryPathDialog({ open, onClose, onCreated }) {
     setSubmitting(true);
     setFormError(null);
     try {
-      let res = await createTag({ name: root, parentId: null });
-      if (!res.ok) {
-        const msg = await messageFromFailedResponse(res);
-        throw new Error(msg || `Could not create main category “${root}” (${res.status})`);
-      }
-      let data = await res.json();
-      const idRoot = data?.id;
-      if (idRoot == null) throw new Error('Missing id for main category.');
-
-      res = await createTag({ name: s1, parentId: idRoot });
-      if (!res.ok) {
-        const msg = await messageFromFailedResponse(res);
-        throw new Error(msg || `Could not create 1st subcategory “${s1}” (${res.status})`);
-      }
-      data = await res.json();
-      const id1 = data?.id;
-      if (id1 == null) throw new Error('Missing id for 1st subcategory.');
-
-      res = await createTag({ name: s2, parentId: id1 });
-      if (!res.ok) {
-        const msg = await messageFromFailedResponse(res);
-        throw new Error(msg || `Could not create 2nd subcategory “${s2}” (${res.status})`);
-      }
-      data = await res.json();
-      const id2 = data?.id;
-      if (id2 == null) throw new Error('Missing id for 2nd subcategory.');
-
-      const check = await fetchTagChildren(id2);
-      if (!check.ok) {
-        const msg = await messageFromFailedResponse(check);
-        throw new Error(msg || 'Could not load the new leaf tag.');
-      }
-      const leaf = await check.json();
-      if (leaf.isLeaf !== true) {
-        throw new Error('The last level is not a leaf. Try again or contact support.');
-      }
-      const path = leaf.categoryPath
-        ? String(leaf.categoryPath)
-        : [root, s1, s2].join('.');
-      onCreated?.(path);
+      const leaf = await createThreeLevelTagPath({ main: root, sub1: s1, sub2: s2 });
+      onCreated?.(leaf);
       onClose();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not create category path.');
@@ -92,7 +52,7 @@ export default function NewCategoryPathDialog({ open, onClose, onCreated }) {
 
   return (
     <div
-      className="products-modal-backdrop"
+      className="products-modal-backdrop products-modal-backdrop--new-category"
       role="presentation"
       onClick={() => !submitting && onClose()}
     >
@@ -104,8 +64,13 @@ export default function NewCategoryPathDialog({ open, onClose, onCreated }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="products-modal-header">
-          <h3 id="new-category-title">New category</h3>
-          <p className="products-modal-subtitle">Main category + 2 subcategories (leaf for listings)</p>
+          <h3 id="new-category-title">New: main + 2 subcategories</h3>
+          <p className="products-modal-subtitle">
+            One main, two sub-levels; the leaf is where products attach (e.g.{' '}
+            <span className="products-category-dotted-path">Electronics.Laptop.MSI</span>). If part of
+            the path already exists (e.g. you already added a sibling leaf under the same main and
+            sub), those segments are reused—only the missing one is created.
+          </p>
         </div>
         <form onSubmit={(e) => void handleSubmit(e)}>
           <div className="products-modal-body">
@@ -119,8 +84,7 @@ export default function NewCategoryPathDialog({ open, onClose, onCreated }) {
             )}
             <div className="products-modal-form-panel">
               <p className="products-modal-field-hint products-new-category-hint">
-                Example path:{' '}
-                <span className="products-category-dotted-path">Electronics.Laptop.MSI</span>
+                The product is placed on the <strong>second</strong> subcategory (leaf).
               </p>
               <div className="products-modal-field">
                 <label htmlFor="new-cat-root">Main category</label>
@@ -150,6 +114,15 @@ export default function NewCategoryPathDialog({ open, onClose, onCreated }) {
                   id="new-cat-s2"
                   value={pathSub2}
                   onChange={(e) => setPathSub2(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    if (!pathRoot.trim() || !pathSub1.trim() || !pathSub2.trim() || submitting) {
+                      return;
+                    }
+                    const form = e.currentTarget.closest('form');
+                    if (form) form.requestSubmit();
+                  }}
                   disabled={submitting}
                   placeholder="e.g. MSI"
                   autoComplete="off"
@@ -176,7 +149,7 @@ export default function NewCategoryPathDialog({ open, onClose, onCreated }) {
               className="products-modal-btn products-modal-btn--primary"
               disabled={submitting || !pathRoot.trim() || !pathSub1.trim() || !pathSub2.trim()}
             >
-              {submitting ? 'Creating…' : 'Create category'}
+              {submitting ? 'Creating…' : 'Create path & use as product category'}
             </button>
           </div>
         </form>

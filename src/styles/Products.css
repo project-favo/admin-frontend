@@ -410,6 +410,10 @@
   box-sizing: border-box;
 }
 
+.products-modal-backdrop.products-modal-backdrop--new-category {
+  z-index: 1001;
+}
+
 .products-modal {
   width: min(100%, 520px);
   max-height: min(90vh, 680px);

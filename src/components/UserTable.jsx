@@ -1,6 +1,7 @@
 import '../styles/UserTable.css';
 import AdminFloatingMenu, { isInsideAdminFloatingMenu } from './AdminFloatingMenu';
 import { useEffect, useId, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 /**
  * @typedef {Object} UserTableRow
@@ -101,7 +102,14 @@ const UserTable = ({ users, onUserAction }) => {
                       {initials}
                     </span>
                   </td>
-                  <td className="users-cell-username">{username}</td>
+                  <td className="users-cell-username">
+                    <Link
+                      to={`/users/${encodeURIComponent(id)}`}
+                      className="users-username-link"
+                    >
+                      {username}
+                    </Link>
+                  </td>
                   <td className="users-cell-email">{email}</td>
                   <td>
                     <span

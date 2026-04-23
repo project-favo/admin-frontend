@@ -654,7 +654,7 @@ const Dashboard = () => {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const rangeStart = new Date(todayStart);
     rangeStart.setDate(rangeStart.getDate() - 6);
-    const fmt = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+    const fmt = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(rangeStart);
       d.setDate(rangeStart.getDate() + i);

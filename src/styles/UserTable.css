@@ -124,6 +124,25 @@
   color: var(--users-table-text);
 }
 
+a.users-username-link {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+a.users-username-link:hover {
+  color: var(--users-table-accent);
+  border-bottom-color: rgba(145, 0, 41, 0.35);
+}
+
+a.users-username-link:focus-visible {
+  outline: 2px solid var(--users-table-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 .users-cell-email {
   color: var(--users-table-text-muted);
   font-size: 0.9rem;

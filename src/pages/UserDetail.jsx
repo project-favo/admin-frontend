@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   getAdminUser,
+  getAdminUserFlaggedProducts,
+  getAdminUserWishlist,
   getMyReviews,
   listReviewsByUserId,
   messageFromFailedResponse,
   normalizeAdminPageDto,
 } from '../api/adminApi';
-import { getUserWishlist } from '../api/interactionApi';
 import { buildUserProfileImageUrl, resolveResourceUrl } from '../config/api';
 import { useAuth } from '../hooks/useAuth';
 import { statusLabelFromKind, toStatusKind, toUsernameLabel } from '../utils/adminUserRows';
@@ -77,7 +78,7 @@ function buildReviewPreview(r) {
 }
 
 /**
- * GET /api/interactions/{userId}/wishlist hatalarını sarı satır metnine çevirir.
+ * GET /api/admin/users/{id}/wishlist hatalarını sarı satır metnine çevirir.
  * @param {Response} res
  * @param {string} routeHint
  * @param {string} fallback
@@ -85,7 +86,7 @@ function buildReviewPreview(r) {
 async function messageForUserWishlistError(res, routeHint, fallback) {
   const raw = await messageFromFailedResponse(res).catch(() => '');
   if (res.status === 404) {
-    return `This list needs the API ${routeHint} (see project-favo/backend).`;
+    return `This list needs the API ${routeHint} (admin backend).`;
   }
   if (res.status === 401 || res.status === 403) {
     return `Sign in and refresh, or the route ${routeHint} is unavailable.`;
@@ -112,6 +113,9 @@ const UserDetail = () => {
 
   const [wishlistItems, setWishlistItems] = useState(/** @type {unknown[]} */ ([]));
   const [wishlistError, setWishlistError] = useState(null);
+
+  const [flaggedProductItems, setFlaggedProductItems] = useState(/** @type {unknown[]} */ ([]));
+  const [flaggedProductsError, setFlaggedProductsError] = useState(null);
 
   const [avatarError, setAvatarError] = useState(false);
   const [avatarPhase, setAvatarPhase] = useState(0);
@@ -173,6 +177,7 @@ const UserDetail = () => {
     setActivityLoading(true);
     setReviewsError(null);
     setWishlistError(null);
+    setFlaggedProductsError(null);
 
     (async () => {
       try {
@@ -192,9 +197,9 @@ const UserDetail = () => {
           setReviewsError(await messageFromFailedResponse(rRev).catch(() => 'Could not load reviews.'));
         }
 
-        const rW = await getUserWishlist(idParam, {
+        const rW = await getAdminUserWishlist(idParam, {
           page: 0,
-          size: 50,
+          size: 20,
           signal: controller.signal,
         });
         if (cancelled) return;
@@ -207,9 +212,27 @@ const UserDetail = () => {
           setWishlistError(
             await messageForUserWishlistError(
               rW,
-              `GET /api/interactions/${idParam}/wishlist`,
+              `GET /api/admin/users/${idParam}/wishlist`,
               'Could not load wishlist.'
             )
+          );
+        }
+
+        const rFlag = await getAdminUserFlaggedProducts(idParam, {
+          page: 0,
+          size: 20,
+          activeOnly: true,
+          signal: controller.signal,
+        });
+        if (cancelled) return;
+        if (rFlag.ok) {
+          const dtoF = await rFlag.json();
+          setFlaggedProductItems(normalizeAdminPageDto(dtoF).content);
+          setFlaggedProductsError(null);
+        } else {
+          setFlaggedProductItems([]);
+          setFlaggedProductsError(
+            await messageFromFailedResponse(rFlag).catch(() => 'Could not load reported products.')
           );
         }
       } catch (e) {
@@ -218,6 +241,7 @@ const UserDetail = () => {
         if (!cancelled) {
           setUserReviews([]);
           setWishlistItems([]);
+          setFlaggedProductItems([]);
           setReviewsError(e instanceof Error ? e.message : 'Activity load failed.');
         }
       } finally {
@@ -410,7 +434,7 @@ const UserDetail = () => {
                 <section className="user-detail-activity" aria-label="Liked products">
                   <h2 className="user-detail-activity-h">Liked products (wishlist)</h2>
                   {(() => {
-                    const missing = wishlistError && wishlistError.includes('see project-favo');
+                    const missing = wishlistError && wishlistError.includes('This list needs the API');
                     const hardErr = wishlistError && !missing;
                     if (hardErr) {
                       return (
@@ -457,15 +481,41 @@ const UserDetail = () => {
                   })()}
                 </section>
 
-                <section className="user-detail-activity" aria-label="Flagged reviews">
+                <section
+                  className="user-detail-activity"
+                  aria-label="Products this user reported"
+                >
                   <h2 className="user-detail-activity-h">Reviews this user reported (flags)</h2>
-                  <p className="user-detail-activity-warn" role="status">
-                    project-favo/backend has no GET endpoint to list which reviews a user reported. Review
-                    reports are created with{' '}
-                    <code className="user-detail-inline-code">POST /api/reviews/&#123;id&#125;/flag</code>{' '}
-                    only. Use the Moderation page for review status.
-                  </p>
-                  <p className="user-detail-activity-empty">Not available via API.</p>
+                  {flaggedProductsError ? (
+                    <p className="user-detail-activity-err" role="alert">
+                      {flaggedProductsError}
+                    </p>
+                  ) : flaggedProductItems.length === 0 ? (
+                    <p className="user-detail-activity-empty">No reported products.</p>
+                  ) : (
+                    <ul className="user-detail-activity-list">
+                      {flaggedProductItems.map((p) => {
+                        const pid = p?.id;
+                        return (
+                          <li
+                            key={pid != null ? String(pid) : productLabelFrom(p)}
+                            className="user-detail-activity-item"
+                          >
+                            <div className="user-detail-activity-item-top">
+                              <span className="user-detail-activity-title">
+                                {productLabelFrom(p)}
+                              </span>
+                            </div>
+                            {p?.tag?.categoryPath && (
+                              <p className="user-detail-activity-sub">
+                                {String(p.tag.categoryPath)}
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </section>
               </>
             )}

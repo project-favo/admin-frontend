@@ -150,6 +150,41 @@ export async function getAdminUser(id, { signal } = {}) {
 }
 
 /**
+ * Admin: GET /api/admin/users/{id}/wishlist — kullanıcının beğenilen ürünleri (paged).
+ */
+export async function getAdminUserWishlist(
+  id,
+  { page = 0, size = 20, signal } = {}
+) {
+  const qs = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+  return apiFetch(
+    `/api/admin/users/${encodeURIComponent(String(id))}/wishlist?${qs.toString()}`,
+    { method: 'GET', signal }
+  );
+}
+
+/**
+ * Admin: GET /api/admin/users/{id}/flagged-products — kullanıcının raporladığı / işaretlediği ürünler (paged).
+ */
+export async function getAdminUserFlaggedProducts(
+  id,
+  { page = 0, size = 20, activeOnly = true, signal } = {}
+) {
+  const qs = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+    activeOnly: String(Boolean(activeOnly)),
+  });
+  return apiFetch(
+    `/api/admin/users/${encodeURIComponent(String(id))}/flagged-products?${qs.toString()}`,
+    { method: 'GET', signal }
+  );
+}
+
+/**
  * GET /api/reviews/me — giriş yapan kullanıcının kendi yorumları (en yeni önce).
  * @see com.favo.backend.controller.ReviewController#getMyReviews
  */

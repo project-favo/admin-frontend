@@ -77,7 +77,7 @@ function AddProduct() {
 
   return (
     <div className="products-page">
-      <div className="products-page-inner">
+      <div className="products-page-inner products-page-inner--user-detail">
         <header className="products-header">
           <p className="products-add-back">
             <Link to="/products">← Back to catalog</Link>

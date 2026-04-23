@@ -19,6 +19,15 @@
   box-sizing: border-box;
 }
 
+/* Same content column as User detail (.user-detail-inner in UserDetail.css) */
+.products-page-inner--user-detail {
+  max-width: min(48rem, 100%);
+}
+
+.products-page-inner--user-detail .products-add-card--wide {
+  max-width: 100%;
+}
+
 @media (min-width: 769px) {
   .admin-main .products-page {
     padding-top: max(

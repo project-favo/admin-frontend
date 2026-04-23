@@ -138,6 +138,41 @@ export async function patchAdminUserDeactivate(id, { signal } = {}) {
   });
 }
 
+/**
+ * Admin: GET /api/admin/users/{id} — UserResponseDto (tüm alanlar).
+ * @see https://github.com/project-favo/backend/blob/main/src/main/java/com/favo/backend/controller/AdminController.java
+ */
+export async function getAdminUser(id, { signal } = {}) {
+  return apiFetch(`/api/admin/users/${encodeURIComponent(String(id))}`, {
+    method: 'GET',
+    signal,
+  });
+}
+
+/**
+ * GET /api/reviews/me — giriş yapan kullanıcının kendi yorumları (en yeni önce).
+ * @see com.favo.backend.controller.ReviewController#getMyReviews
+ */
+export async function getMyReviews({ signal } = {}) {
+  return apiFetch('/api/reviews/me', {
+    method: 'GET',
+    signal,
+    forceIdTokenRefresh: true,
+  });
+}
+
+/**
+ * GET /api/reviews/user/{userId} — belirli kullanıcının (aktif) yorumları.
+ * @see com.favo.backend.controller.ReviewController#getReviewsByUser
+ */
+export async function listReviewsByUserId(userId, { signal } = {}) {
+  return apiFetch(`/api/reviews/user/${encodeURIComponent(String(userId))}`, {
+    method: 'GET',
+    signal,
+    forceIdTokenRefresh: true,
+  });
+}
+
 export async function listAdminReviews({
   page = 0,
   size = 20,

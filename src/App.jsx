@@ -11,6 +11,7 @@ import UserDetail from './pages/UserDetail';
 import Products from './pages/Products';
 import AddProduct from './pages/AddProduct';
 import Moderation from './pages/Moderation';
+import ReviewDetail from './pages/ReviewDetail';
 import Settings from './pages/Settings';
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
               <Route path="/products" element={<Products />} />
               <Route path="/products/new" element={<AddProduct />} />
               <Route path="/moderation" element={<Moderation />} />
+              <Route path="/moderation/reviews/:id" element={<ReviewDetail />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Route>

@@ -1,11 +1,14 @@
 import '../styles/ModerationTable.css';
+import { Link } from 'react-router-dom';
 
 /**
  * @typedef {Object} ModerationTableRow
  * @property {string} id
  * @property {boolean} [hasNumericId]
+ * @property {string | null} [reviewPath]
  * @property {'published'|'rejected'|'auto_rejected'} moderationStatusKind
  * @property {string} contentPreview
+ * @property {string} reviewerLabel
  * @property {string} productLabel
  * @property {string} collaborativeLabel
  * @property {string} likeCountDisplay
@@ -23,15 +26,26 @@ import '../styles/ModerationTable.css';
  *   onApprove: (id: string) => void;
  *   onReject: (id: string) => void;
  *   actionBusyId: string | null;
+ *   title?: string;
+ *   ariaLabel?: string;
  * }} props
  */
-const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
+const ModerationTable = ({
+  items,
+  onApprove,
+  onReject,
+  actionBusyId,
+  title,
+  ariaLabel = 'Content moderation queue',
+}) => {
   return (
-    <section className="moderation-table-wrap" aria-label="Content moderation queue">
+    <section className="moderation-table-wrap" aria-label={ariaLabel}>
+      {title ? <h3 className="moderation-table-title">{title}</h3> : null}
       <div className="moderation-table-scroll">
         <table className="moderation-table">
           <colgroup>
             <col className="moderation-table-col-preview" />
+            <col className="moderation-table-col-user" />
             <col className="moderation-table-col-product" />
             <col className="moderation-table-col-collab" />
             <col className="moderation-table-col-likes" />
@@ -43,6 +57,7 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
           <thead>
             <tr>
               <th scope="col">Content Preview</th>
+              <th scope="col">User</th>
               <th scope="col">Product</th>
               <th scope="col">Collaborative</th>
               <th scope="col">Likes</th>
@@ -57,8 +72,10 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
               ({
                 id,
                 hasNumericId = true,
+                reviewPath = null,
                 moderationStatusKind = 'published',
                 contentPreview,
+                reviewerLabel,
                 productLabel,
                 collaborativeLabel,
                 likeCountDisplay,
@@ -110,7 +127,20 @@ const ModerationTable = ({ items, onApprove, onReject, actionBusyId }) => {
 
                 return (
                   <tr key={id} className={rowClass}>
-                    <td className="moderation-cell-preview">{contentPreview}</td>
+                    <td className="moderation-cell-preview">
+                      {reviewPath ? (
+                        <Link
+                          className="moderation-cell-preview-link"
+                          to={reviewPath}
+                          title="Open review detail"
+                        >
+                          {contentPreview}
+                        </Link>
+                      ) : (
+                        contentPreview
+                      )}
+                    </td>
+                    <td className="moderation-cell-user">{reviewerLabel}</td>
                     <td className="moderation-cell-product">{productLabel}</td>
                     <td className="moderation-cell-collab">{collaborativeLabel}</td>
                     <td className="moderation-cell-likes">{likeCountDisplay}</td>

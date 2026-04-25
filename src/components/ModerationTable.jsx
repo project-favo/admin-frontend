@@ -10,7 +10,6 @@ import { Link } from 'react-router-dom';
  * @property {string} contentPreview
  * @property {string} reviewerLabel
  * @property {string} productLabel
- * @property {string} collaborativeLabel
  * @property {string} likeCountDisplay
  * @property {string} userReportLabel
  * @property {'reported'|'not_reported'|'unknown'} [userReportKind]
@@ -47,7 +46,6 @@ const ModerationTable = ({
             <col className="moderation-table-col-preview" />
             <col className="moderation-table-col-user" />
             <col className="moderation-table-col-product" />
-            <col className="moderation-table-col-collab" />
             <col className="moderation-table-col-likes" />
             <col className="moderation-table-col-reports" />
             <col className="moderation-table-col-score" />
@@ -59,7 +57,6 @@ const ModerationTable = ({
               <th scope="col">Content Preview</th>
               <th scope="col">User</th>
               <th scope="col">Product</th>
-              <th scope="col">Collaborative</th>
               <th scope="col">Likes</th>
               <th scope="col">Reported</th>
               <th scope="col">AI Toxicity</th>
@@ -77,7 +74,6 @@ const ModerationTable = ({
                 contentPreview,
                 reviewerLabel,
                 productLabel,
-                collaborativeLabel,
                 likeCountDisplay,
                 userReportLabel,
                 userReportKind = 'unknown',
@@ -142,7 +138,6 @@ const ModerationTable = ({
                     </td>
                     <td className="moderation-cell-user">{reviewerLabel}</td>
                     <td className="moderation-cell-product">{productLabel}</td>
-                    <td className="moderation-cell-collab">{collaborativeLabel}</td>
                     <td className="moderation-cell-likes">{likeCountDisplay}</td>
                     <td className="moderation-cell-reports">
                       <span className={reportClass} title={userReportTitle}>

@@ -1,0 +1,164 @@
+.review-detail-page {
+  --rd-accent: #910029;
+  --rd-surface: #ffffff;
+  --rd-border: rgba(0, 0, 0, 0.08);
+  --rd-text: #1a1a1a;
+  --rd-text-muted: #5c5c5c;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+@media (min-width: 769px) {
+  .admin-main .review-detail-page {
+    padding-top: max(
+      0px,
+      calc(
+        var(--admin-sidebar-pad-top) +
+          (var(--admin-sidebar-title-line-height) * var(--admin-sidebar-title-font)) +
+          var(--admin-sidebar-rule-margin-top) -
+          40px
+      )
+    );
+  }
+}
+
+.review-detail-inner {
+  width: 100%;
+  max-width: min(48rem, 100%);
+  margin: 0 auto;
+  padding: 0 0.5rem;
+  box-sizing: border-box;
+}
+
+.review-detail-back {
+  margin: 0 0 0.75rem;
+}
+
+.review-detail-back-link {
+  color: var(--rd-accent);
+  font-size: 0.875rem;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.review-detail-back-link:hover {
+  text-decoration: underline;
+}
+
+.review-detail-header {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rd-border);
+}
+
+.review-detail-title {
+  margin: 0;
+  color: var(--rd-accent);
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-family: 'Abril Fatface', serif;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.review-detail-idline {
+  margin: 0.4rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--rd-text-muted);
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+}
+
+.review-detail-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1rem;
+  color: var(--rd-text-muted);
+  font-size: 0.9375rem;
+}
+
+.review-detail-alert {
+  padding: 0.9rem 1rem;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+}
+
+.review-detail-alert--error {
+  background: rgba(180, 35, 35, 0.08);
+  border: 1px solid rgba(180, 35, 35, 0.2);
+  color: #7f1d1d;
+}
+
+.review-detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.review-detail-card {
+  background: var(--rd-surface);
+  border: 1px solid var(--rd-border);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.review-detail-section-title {
+  margin: 0 0 0.7rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--rd-text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.review-detail-content {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--rd-text);
+  word-break: break-word;
+}
+
+.review-detail-dl {
+  margin: 0;
+}
+
+.review-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) 1fr;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  align-items: baseline;
+}
+
+.review-detail-row:last-child {
+  border-bottom: none;
+}
+
+.review-detail-row dt {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--rd-text-muted);
+  font-weight: 600;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.review-detail-row dd {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--rd-text);
+  word-break: break-word;
+}
+
+@media (max-width: 500px) {
+  .review-detail-row {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}

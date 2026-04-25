@@ -254,6 +254,16 @@ export async function listAdminReviews({
 }
 
 /**
+ * Admin: GET /api/admin/reviews/{id} — tekil review detayı.
+ */
+export async function getAdminReview(id, { signal } = {}) {
+  return apiFetch(`/api/admin/reviews/${encodeURIComponent(String(id))}`, {
+    method: 'GET',
+    signal,
+  });
+}
+
+/**
  * Mevcut filtreyle tüm sayfaları sırayla çeker (export vb. için).
  * @param {{ activeOnly?: boolean, pageSize?: number, signal?: AbortSignal }} opts
  */

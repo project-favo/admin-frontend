@@ -105,6 +105,28 @@ function formatProductLabel(review) {
   return '—';
 }
 
+function formatReviewerLabel(review) {
+  const nameRaw =
+    review?.ownerUserName ??
+    review?.owner_username ??
+    review?.ownerUsername ??
+    review?.userName ??
+    review?.username ??
+    review?.user_name ??
+    review?.authorName ??
+    review?.author_name ??
+    review?.fullName ??
+    review?.full_name ??
+    review?.name;
+  const idRaw = review?.userId ?? review?.user_id ?? review?.authorId ?? review?.author_id;
+  const name = nameRaw != null ? String(nameRaw).trim() : '';
+  const idStr = idRaw != null && String(idRaw).trim() !== '' ? String(idRaw).trim() : '';
+  if (name && idStr) return `${name} (#${idStr})`;
+  if (name) return name;
+  if (idStr) return `User #${idStr}`;
+  return '—';
+}
+
 /** Özet listesinde aynı ürünü iki kez göstermemek için (productId öncelikli). */
 function productKeyFromReview(review) {
   const idRaw = review?.productId ?? review?.product_id;
@@ -250,8 +272,10 @@ function mapReviewDtoToRow(r, pageNum, idx, sets) {
   return {
     id: idStr,
     hasNumericId,
+    reviewPath: hasNumericId ? `/moderation/reviews/${encodeURIComponent(idStr)}` : null,
     moderationStatusKind,
     contentPreview: toContentPreview(r),
+    reviewerLabel: formatReviewerLabel(r),
     productLabel: formatProductLabel(r),
     productKey: productKeyFromReview(r),
     collaborativeLabel: formatCollaborativeLabel(r),
@@ -296,12 +320,18 @@ function reviewMatchesSearch(review, qLower) {
   return previewBody.includes(qLower) || productName.includes(qLower);
 }
 
+function reviewMatchesReportFilter(review, reportFilter) {
+  if (reportFilter !== 'reported') return true;
+  return normalizeModerationStatus(review) === 'MANUALLY_FLAGGED';
+}
+
 const Moderation = () => {
   const [page, setPage] = useState(0);
   const [size] = useState(() => getTablePageSize());
   const [scoreFilter, setScoreFilter] = useState(
     /** @type {'all' | 'low' | 'mid' | 'high'} */ ('all')
   );
+  const [reportFilter, setReportFilter] = useState(/** @type {'all' | 'reported'} */ ('all'));
   const [rows, setRows] = useState([]);
   const [totalElements, setTotalElements] = useState(null);
   const [totalPages, setTotalPages] = useState(null);
@@ -346,7 +376,7 @@ const Moderation = () => {
 
     (async () => {
       try {
-        if (isSearchActive) {
+        if (isSearchActive || scoreFilter !== 'all' || reportFilter !== 'all') {
           const all = await fetchAllAdminReviews({
             activeOnly: false,
             pageSize: 200,
@@ -354,10 +384,15 @@ const Moderation = () => {
           });
           if (cancelled) return;
           let filtered = all;
+          if (reportFilter !== 'all') {
+            filtered = filtered.filter((r) => reviewMatchesReportFilter(r, reportFilter));
+          }
           if (scoreFilter !== 'all') {
             filtered = filtered.filter((r) => getReviewScoreTone(r) === scoreFilter);
           }
-          filtered = filtered.filter((r) => reviewMatchesSearch(r, searchTrim));
+          if (isSearchActive) {
+            filtered = filtered.filter((r) => reviewMatchesSearch(r, searchTrim));
+          }
           const n = filtered.length;
           const tp = n === 0 ? 0 : Math.ceil(n / size);
           const slice = filtered.slice(page * size, page * size + size);
@@ -366,7 +401,7 @@ const Moderation = () => {
           setRows(slice.map((r, idx) => mapReviewDtoToRow(r, page, idx, setsSearch)));
           setTotalElements(n);
           setTotalPages(tp);
-        } else if (scoreFilter === 'all') {
+        } else {
           const res = await listAdminReviews({
             page,
             size,
@@ -385,22 +420,6 @@ const Moderation = () => {
           const meta = readPageMeta(dto);
           setTotalElements(meta.totalElements);
           setTotalPages(meta.totalPages);
-        } else {
-          const all = await fetchAllAdminReviews({
-            activeOnly: false,
-            pageSize: 200,
-            signal: controller.signal,
-          });
-          if (cancelled) return;
-          const filtered = all.filter((r) => getReviewScoreTone(r) === scoreFilter);
-          const n = filtered.length;
-          const tp = n === 0 ? 0 : Math.ceil(n / size);
-          const slice = filtered.slice(page * size, page * size + size);
-          setError(null);
-          const setsBand = loadModerationTrackingSets();
-          setRows(slice.map((r, idx) => mapReviewDtoToRow(r, page, idx, setsBand)));
-          setTotalElements(n);
-          setTotalPages(tp);
         }
       } catch (e) {
         if (cancelled) return;
@@ -417,7 +436,7 @@ const Moderation = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [page, size, scoreFilter, pollTick, listVersion, isSearchActive, searchTrim]);
+  }, [page, size, scoreFilter, reportFilter, pollTick, listVersion, isSearchActive, searchTrim]);
 
   useEffect(() => {
     setPage(0);
@@ -436,43 +455,13 @@ const Moderation = () => {
   const formattedTotal = useMemo(() => formatInteger(totalElements), [totalElements]);
   const showingFrom = rows.length === 0 ? 0 : page * size + 1;
   const showingTo = page * size + rows.length;
-  const reportedOnPage = useMemo(
-    () => rows.filter((row) => row.userReportKind === 'reported'),
-    [rows]
-  );
-
-  const { reportedUniqueProductCount, reportedProductsPreview } = useMemo(() => {
-    /** @type {Map<string, { productKey: string, productLabel: string, reviews: { id: string, contentPreview: string }[] }>} */
-    const byProduct = new Map();
-    for (const row of reportedOnPage) {
-      const key = row.productKey ?? `lbl:${row.productLabel}`;
-      let group = byProduct.get(key);
-      if (!group) {
-        group = {
-          productKey: key,
-          productLabel: row.productLabel,
-          reviews: [],
-        };
-        byProduct.set(key, group);
-      }
-      group.reviews.push({
-        id: row.id,
-        contentPreview: row.contentPreview,
-      });
-    }
-    const groups = Array.from(byProduct.values());
-    return {
-      reportedUniqueProductCount: groups.length,
-      reportedProductsPreview: groups.slice(0, 3),
-    };
-  }, [reportedOnPage]);
 
   const canPrev = page > 0 && !loading;
   const canNext =
     !loading &&
     (typeof totalPages === 'number' && totalPages > 0
       ? page + 1 < totalPages
-      : !isSearchActive && scoreFilter === 'all' && rows.length === size);
+      : !isSearchActive && scoreFilter === 'all' && reportFilter === 'all' && rows.length === size);
   const pageStatusText = useMemo(() => {
     const tp =
       typeof totalPages === 'number' && totalPages > 0 ? String(totalPages) : '—';
@@ -500,18 +489,22 @@ const Moderation = () => {
       const reviews = await fetchAllAdminReviews({
         activeOnly: false,
       });
-      let filtered =
-        scoreFilter === 'all'
-          ? reviews
-          : reviews.filter((r) => getReviewScoreTone(r) === scoreFilter);
+      let filtered = reviews;
+      if (reportFilter !== 'all') {
+        filtered = filtered.filter((r) => reviewMatchesReportFilter(r, reportFilter));
+      }
+      if (scoreFilter !== 'all') {
+        filtered = filtered.filter((r) => getReviewScoreTone(r) === scoreFilter);
+      }
       if (isSearchActive) {
         filtered = filtered.filter((r) => reviewMatchesSearch(r, searchTrim));
       }
       const setsPdf = loadModerationTrackingSets();
       const rows = filtered.map((r, idx) => mapReviewDtoToRow(r, 0, idx, setsPdf));
-      const filterLabel =
+      const reportLabel = reportFilter === 'reported' ? 'Reported reviews' : 'All reviews';
+      const scoreLabel =
         scoreFilter === 'all'
-          ? 'All reviews'
+          ? null
           : scoreFilter === 'low'
             ? 'AI toxicity: Low (0–30)'
             : scoreFilter === 'mid'
@@ -528,7 +521,7 @@ const Moderation = () => {
             aiScore,
           })
         ),
-        filterLabel: `${filterLabel}${searchSuffix}`,
+        filterLabel: `${reportLabel}${scoreLabel ? ` · ${scoreLabel}` : ''}${searchSuffix}`,
       });
       setActionFeedback({ ok: true, message: 'PDF downloaded.' });
     } catch (e) {
@@ -599,17 +592,63 @@ const Moderation = () => {
             title="Total reviews matching the current filter"
           >
             <span className="moderation-total-pill-label">
-              {scoreFilter === 'all'
-                ? 'All reviews'
-                : scoreFilter === 'low'
-                  ? 'Low (0–30)'
-                  : scoreFilter === 'mid'
-                    ? 'Mid (31–69)'
-                    : 'High (70–100)'}
+              {reportFilter === 'reported'
+                ? scoreFilter === 'all'
+                  ? 'Reported reviews'
+                  : scoreFilter === 'low'
+                    ? 'Reported · Low (0–30)'
+                    : scoreFilter === 'mid'
+                      ? 'Reported · Mid (31–69)'
+                      : 'Reported · High (70–100)'
+                : scoreFilter === 'all'
+                  ? 'All reviews'
+                  : scoreFilter === 'low'
+                    ? 'Low (0–30)'
+                    : scoreFilter === 'mid'
+                      ? 'Mid (31–69)'
+                      : 'High (70–100)'}
             </span>
             <span className="moderation-total-pill-value" aria-live="polite">
               {loading && formattedTotal == null ? '…' : formattedTotal ?? '—'}
             </span>
+          </div>
+          <div
+            className="moderation-filter-segment"
+            role="group"
+            aria-label="Filter by report status"
+          >
+            <button
+              type="button"
+              className={
+                reportFilter === 'all'
+                  ? 'moderation-filter-segment-btn moderation-filter-segment-btn--active'
+                  : 'moderation-filter-segment-btn'
+              }
+              onClick={() => {
+                if (reportFilter === 'all') return;
+                setPage(0);
+                setReportFilter('all');
+              }}
+              disabled={loading}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              className={
+                reportFilter === 'reported'
+                  ? 'moderation-filter-segment-btn moderation-filter-segment-btn--active'
+                  : 'moderation-filter-segment-btn'
+              }
+              onClick={() => {
+                if (reportFilter === 'reported') return;
+                setPage(0);
+                setReportFilter('reported');
+              }}
+              disabled={loading}
+            >
+              Reported
+            </button>
           </div>
           <div
             className="moderation-filter-segment moderation-filter-segment--score"
@@ -683,81 +722,6 @@ const Moderation = () => {
           </div>
         )}
 
-        {!loading && !error && rows.length > 0 && (
-          <section
-            className="moderation-reported-summary"
-            aria-labelledby="moderation-reported-summary-title"
-          >
-            <div className="moderation-reported-summary-inner">
-              <header className="moderation-reported-summary-head">
-                <div className="moderation-reported-summary-heading">
-                  <h3 id="moderation-reported-summary-title" className="moderation-reported-summary-title">
-                    Reported on this page
-                  </h3>
-                </div>
-                <div
-                  className="moderation-reported-summary-metric"
-                  title="Distinct products among reported reviews on this page"
-                  aria-label={
-                    reportedUniqueProductCount === 1
-                      ? '1 distinct product'
-                      : `${formatInteger(reportedUniqueProductCount) ?? '0'} distinct products`
-                  }
-                >
-                  <span className="moderation-reported-summary-metric-value">
-                    {formatInteger(reportedUniqueProductCount) ?? '0'}
-                  </span>
-                  <span className="moderation-reported-summary-metric-label">products</span>
-                </div>
-              </header>
-              {reportedOnPage.length === 0 ? (
-                <p className="moderation-reported-summary-empty">
-                  No user-reported reviews on this page.
-                </p>
-              ) : (
-                <>
-                  <ul className="moderation-reported-summary-list" role="list">
-                    {reportedProductsPreview.map((group, i) => (
-                      <li key={group.productKey} className="moderation-reported-summary-item">
-                        <div className="moderation-reported-summary-item-head">
-                          <span className="moderation-reported-summary-index" aria-hidden="true">
-                            {i + 1}
-                          </span>
-                          <span className="moderation-reported-summary-product">{group.productLabel}</span>
-                        </div>
-                        <ul
-                          className="moderation-reported-summary-snippet-list"
-                          aria-label={`Reported reviews for ${group.productLabel}`}
-                        >
-                          {group.reviews.map((rev) => (
-                            <li key={rev.id} className="moderation-reported-summary-snippet-item">
-                              <span className="moderation-reported-summary-review-id" title="Review ID">
-                                #{rev.id}
-                              </span>
-                              <span className="moderation-reported-summary-snippet" title={rev.contentPreview}>
-                                {rev.contentPreview}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
-                  {reportedUniqueProductCount > reportedProductsPreview.length ? (
-                    <p className="moderation-reported-summary-more">
-                      +{formatInteger(reportedUniqueProductCount - reportedProductsPreview.length) ?? '0'}{' '}
-                      more{' '}
-                      {reportedUniqueProductCount - reportedProductsPreview.length === 1
-                        ? 'product'
-                        : 'products'}
-                    </p>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </section>
-        )}
-
         {loading ? (
           <div className="moderation-loading" aria-live="polite" aria-busy="true">
             <img src={loadingDots} alt="" />
@@ -769,7 +733,9 @@ const Moderation = () => {
             <p className="moderation-empty-hint">
               {isSearchActive
                 ? 'No reviews match this search. Try different keywords.'
-                : scoreFilter === 'all'
+                : reportFilter === 'reported'
+                  ? 'There are no user-reported reviews matching this filter.'
+                  : scoreFilter === 'all'
                   ? 'No review records were returned for this page.'
                   : 'No reviews match this AI toxicity filter (or scores are still pending).'}
             </p>

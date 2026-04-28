@@ -121,7 +121,9 @@
   max-width: 100%;
 }
 
-.moderation-filter-segment--score .moderation-filter-segment-btn {
+.moderation-filter-segment--report .moderation-filter-segment-btn,
+.moderation-filter-segment--score .moderation-filter-segment-btn,
+.moderation-filter-segment--catalog .moderation-filter-segment-btn {
   text-transform: none;
   letter-spacing: 0.02em;
 }

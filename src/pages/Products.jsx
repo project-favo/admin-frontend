@@ -1,20 +1,16 @@
 import '../styles/Products.css';
 import NewCategoryPathDialog from '../components/NewCategoryPathDialog';
-import ProductCategoryPicker from '../components/ProductCategoryPicker';
 import ProductTable from '../components/ProductTable';
 import TablePagination from '../components/TablePagination';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  buildProductUpdateBody,
   fetchAllAdminProducts,
-  getAdminProduct,
   listAdminProducts,
   messageFromFailedResponse,
   normalizeAdminPageDto,
   patchAdminProductActivate,
   patchAdminProductDeactivate,
-  putProduct,
 } from '../api/adminApi';
 import { downloadProductsPdf } from '../utils/productsPdfExport';
 import { getTablePageSize } from '../utils/adminPreferences';
@@ -138,102 +134,6 @@ function readProductPageMeta(dto) {
   return { totalElements: n.totalElements, totalPages: n.totalPages };
 }
 
-function getProductImageUrl(product) {
-  if (!product || typeof product !== 'object') return '';
-  const u = product.imageURL ?? product.imageUrl ?? product.image_url;
-  if (u == null || typeof u !== 'string') return '';
-  const t = u.trim();
-  return t;
-}
-
-/**
- * ISO / backend datetime → English (en-US) date + time, e.g. Jan 15, 2024, 2:30 PM.
- * @param {unknown} value
- */
-function formatCreatedAt(value) {
-  if (value == null || value === '') return '—';
-  const d = value instanceof Date ? value : new Date(String(value));
-  if (Number.isNaN(d.getTime())) {
-    return String(value);
-  }
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(d);
-}
-
-function formatProductDetail(product) {
-  if (!product || typeof product !== 'object') return [];
-  const tag = product.tag;
-  const tagLine =
-    tag && typeof tag === 'object'
-      ? [tag.name, tag.categoryPath].filter(Boolean).join(' · ') || '—'
-      : '—';
-  const activeRaw = product?.isActive ?? product?.active ?? product?.is_active;
-  const activeLabel =
-    activeRaw === true ? 'Yes' : activeRaw === false ? 'No' : '—';
-  const createdRaw = product.createdAt ?? product.created_at;
-  return [
-    ['ID', String(product.id ?? '—')],
-    ['Name', product.name != null ? String(product.name) : '—'],
-    ['Description', product.description != null ? String(product.description) : '—'],
-    ['Tag', tagLine],
-    ['Active', activeLabel],
-    ['Created', formatCreatedAt(createdRaw)],
-  ];
-}
-
-/**
- * @param {{ url: string }} props
- */
-function ProductImagePreview({ url, resetKey, alt }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    setFailed(false);
-  }, [resetKey]);
-  if (!url) return null;
-  if (failed) {
-    return (
-      <p className="products-modal-view-image-fallback" role="status">
-        Image could not be loaded.
-      </p>
-    );
-  }
-  return (
-    <img
-      className="products-modal-view-image"
-      src={url}
-      alt={alt || ''}
-      loading="lazy"
-      decoding="async"
-      onError={() => setFailed(true)}
-    />
-  );
-}
-
-/**
- * @param {{ product: object }} props
- */
-function ProductViewImageSection({ product }) {
-  const imageUrl = getProductImageUrl(product);
-  if (!imageUrl) return null;
-  const id = product?.id != null ? String(product.id) : imageUrl;
-  const name = product?.name != null ? String(product.name) : 'Product';
-  return (
-    <div className="products-modal-view-image-block">
-      <ProductImagePreview resetKey={id} url={imageUrl} alt={name} />
-      <a
-        className="products-modal-image-link"
-        href={imageUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        Open image URL
-      </a>
-    </div>
-  );
-}
-
 const Products = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -250,15 +150,6 @@ const Products = () => {
   const [error, setError] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [actionBusyId, setActionBusyId] = useState(null);
-  const [viewModal, setViewModal] = useState(
-    /** @type {null | { status: 'loading' } | { status: 'ok', product: object } | { status: 'err', message: string }} */
-    (null)
-  );
-  const [editModal, setEditModal] = useState(
-    /** @type {null | { status: 'loading' } | { status: 'ok', id: string, name: string, description: string, imageURL: string, selectedCategory: null | { id: number, name: string, categoryPath?: string } } | { status: 'err', message: string }} */
-    (null)
-  );
-  const [editSaving, setEditSaving] = useState(false);
   const [pollTick, setPollTick] = useState(0);
   const pollSilentRef = useRef(false);
   const [exporting, setExporting] = useState(false);
@@ -486,99 +377,6 @@ const Products = () => {
     setRows(nameSearchFull.slice(p * size, p * size + size));
   }, [nameQuery, page, size, nameSearchFull]);
 
-  const handleView = async (id) => {
-    setViewModal({ status: 'loading' });
-    try {
-      const res = await getAdminProduct(id);
-      if (!res.ok) {
-        throw new Error(`Request failed (${res.status})`);
-      }
-      const product = await res.json();
-      setViewModal({ status: 'ok', product });
-    } catch (e) {
-      setViewModal({
-        status: 'err',
-        message: e instanceof Error ? e.message : 'Unknown error',
-      });
-    }
-  };
-
-  const openEdit = async (id) => {
-    setEditModal({ status: 'loading' });
-    try {
-      const res = await getAdminProduct(id);
-      if (!res.ok) {
-        throw new Error(`Request failed (${res.status})`);
-      }
-      const p = await res.json();
-      const tag = p?.tag;
-      const tagIdNum = tag && typeof tag === 'object' && tag.id != null ? Number(tag.id) : NaN;
-      const selectedCategory =
-        tag && typeof tag === 'object' && tag.id != null && Number.isFinite(tagIdNum)
-          ? {
-              id: tagIdNum,
-              name: tag.name != null ? String(tag.name) : '',
-              categoryPath:
-                tag.categoryPath != null ? String(tag.categoryPath) : undefined,
-            }
-          : null;
-      const img = p?.imageURL ?? p?.imageUrl ?? p?.image_url;
-      setEditModal({
-        status: 'ok',
-        id,
-        name: p?.name != null ? String(p.name) : '',
-        description: p?.description != null ? String(p.description) : '',
-        imageURL: img != null ? String(img) : '',
-        selectedCategory,
-      });
-    } catch (e) {
-      setEditModal({
-        status: 'err',
-        message: e instanceof Error ? e.message : 'Unknown error',
-      });
-    }
-  };
-
-  const handleEditFieldChange = (field, value) => {
-    setEditModal((prev) => {
-      if (!prev || prev.status !== 'ok') return prev;
-      return { ...prev, [field]: value };
-    });
-  };
-
-  const handleEditSave = async () => {
-    if (!editModal || editModal.status !== 'ok') return;
-    if (!editModal.selectedCategory) {
-      setActionError('Choose a leaf category (search or browse until a category is selected).');
-      return;
-    }
-    setEditSaving(true);
-    setActionError(null);
-    try {
-      const body = buildProductUpdateBody({
-        name: editModal.name,
-        description: editModal.description,
-        imageURL: editModal.imageURL,
-        tagId: String(editModal.selectedCategory.id),
-      });
-
-      const res = await putProduct(editModal.id, body);
-      if (!res.ok) {
-        const detail = await messageFromFailedResponse(res);
-        throw new Error(
-          detail ||
-            `Update failed (${res.status}). Check PUT /api/products/{id} on the server.`
-        );
-      }
-      setEditModal(null);
-      await refreshCurrentPage();
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Unknown error');
-    } finally {
-      setEditSaving(false);
-    }
-  };
-
   const runProductAction = async (id, fn) => {
     setActionBusyId(id);
     setActionError(null);
@@ -675,7 +473,8 @@ const Products = () => {
         <header className="products-header">
           <h2 className="products-main-title">Product catalog</h2>
           <p className="products-subtitle">
-            Browse listings, filter by availability, and edit or change product availability.
+            Browse listings, filter by availability, and manage product availability. Click a
+            product name to view and edit details.
           </p>
         </header>
 
@@ -847,8 +646,6 @@ const Products = () => {
             </div>
             <ProductTable
               products={rows}
-              onView={handleView}
-              onEdit={openEdit}
               onActivate={handleActivate}
               onDeactivate={handleDeactivate}
               actionBusyId={actionBusyId}
@@ -876,177 +673,6 @@ const Products = () => {
             />
           </div>
         </footer>
-
-        {viewModal != null && (
-          <div
-            className="products-modal-backdrop"
-            role="presentation"
-            onClick={() => setViewModal(null)}
-          >
-            <div
-              className="products-modal"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="products-view-title"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="products-modal-header">
-                <h3 id="products-view-title">Product detail</h3>
-                {viewModal.status === 'ok' && viewModal.product?.name != null && (
-                  <p className="products-modal-subtitle">{String(viewModal.product.name)}</p>
-                )}
-              </div>
-              {viewModal.status === 'loading' && (
-                <div className="products-modal-body">
-                  <div className="products-modal-state products-modal-state--loading" role="status">
-                    Loading product…
-                  </div>
-                </div>
-              )}
-              {viewModal.status === 'err' && (
-                <div className="products-modal-body">
-                  <div className="products-modal-state products-modal-state--error" role="alert">
-                    {viewModal.message}
-                  </div>
-                </div>
-              )}
-              {viewModal.status === 'ok' && (
-                <div className="products-modal-body">
-                  <div className="products-modal-panel">
-                    <ProductViewImageSection product={viewModal.product} />
-                    <div className="products-modal-detail">
-                      {formatProductDetail(viewModal.product).map(([k, v]) => (
-                        <div key={k} className="products-modal-detail-row">
-                          <span className="products-modal-detail-key">{k}</span>
-                          <span className="products-modal-detail-val">{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div className="products-modal-actions">
-                <button
-                  type="button"
-                  className="products-modal-btn products-modal-btn--primary"
-                  onClick={() => setViewModal(null)}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {editModal != null && (
-          <div
-            className="products-modal-backdrop"
-            role="presentation"
-            onClick={() => !editSaving && setEditModal(null)}
-          >
-            <div
-              className="products-modal products-modal--edit"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="products-edit-title"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="products-modal-header">
-                <h3 id="products-edit-title">Edit product</h3>
-                {editModal.status === 'ok' && (
-                  <p className="products-modal-subtitle">ID {editModal.id}</p>
-                )}
-              </div>
-              {editModal.status === 'loading' && (
-                <div className="products-modal-body">
-                  <div className="products-modal-state products-modal-state--loading" role="status">
-                    Loading product…
-                  </div>
-                </div>
-              )}
-              {editModal.status === 'err' && (
-                <div className="products-modal-body">
-                  <div className="products-modal-state products-modal-state--error" role="alert">
-                    {editModal.message}
-                  </div>
-                </div>
-              )}
-              {editModal.status === 'ok' && (
-                <div className="products-modal-body">
-                  <div className="products-modal-form-panel">
-                    <div className="products-modal-field">
-                      <label htmlFor="product-edit-name">Name</label>
-                      <input
-                        id="product-edit-name"
-                        value={editModal.name}
-                        onChange={(e) => handleEditFieldChange('name', e.target.value)}
-                        disabled={editSaving}
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="products-modal-field">
-                      <label htmlFor="product-edit-desc">Description</label>
-                      <textarea
-                        id="product-edit-desc"
-                        value={editModal.description}
-                        onChange={(e) => handleEditFieldChange('description', e.target.value)}
-                        disabled={editSaving}
-                      />
-                    </div>
-                    <div className="products-modal-field">
-                      <label htmlFor="product-edit-img">Image URL</label>
-                      <input
-                        id="product-edit-img"
-                        value={editModal.imageURL}
-                        onChange={(e) => handleEditFieldChange('imageURL', e.target.value)}
-                        disabled={editSaving}
-                        autoComplete="off"
-                      />
-                    </div>
-                    <div className="products-modal-field products-modal-field--last">
-                      <span className="products-category-section-label" id="product-edit-category-label">
-                        Change category
-                      </span>
-                      <div aria-labelledby="product-edit-category-label">
-                        <ProductCategoryPicker
-                          key={String(editModal.id)}
-                          value={editModal.selectedCategory}
-                          onChange={(next) => {
-                            setEditModal((prev) => {
-                              if (!prev || prev.status !== 'ok') return prev;
-                              return { ...prev, selectedCategory: next };
-                            });
-                          }}
-                          disabled={editSaving}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div className="products-modal-actions">
-                <button
-                  type="button"
-                  className="products-modal-btn products-modal-btn--secondary"
-                  disabled={editSaving}
-                  onClick={() => setEditModal(null)}
-                >
-                  Cancel
-                </button>
-                {editModal.status === 'ok' && (
-                  <button
-                    type="button"
-                    className="products-modal-btn products-modal-btn--primary"
-                    disabled={editSaving}
-                    onClick={handleEditSave}
-                  >
-                    {editSaving ? 'Saving…' : 'Save changes'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         <NewCategoryPathDialog
           open={newCategoryOpen}

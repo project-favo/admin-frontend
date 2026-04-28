@@ -35,9 +35,9 @@ function formatCreatedAt(value) {
 }
 
 /**
- * Backend ürün DTO’sunda varsa sayımları oku; yoksa client tarafı yorum listesinden hesaplanır.
+ * Backend ürün DTO’sunda varsa review sayısını oku; yoksa client tarafı yorum listesinden hesaplanır.
  * @param {object} product
- * @returns {{ reviewCount: number, totalLikes: number } | null}
+ * @returns {{ reviewCount: number } | null}
  */
 function tryEmbeddedProductReviewStats(product) {
   if (!product || typeof product !== 'object') return null;
@@ -46,27 +46,16 @@ function tryEmbeddedProductReviewStats(product) {
     product.review_count ??
     product.reviewsCount ??
     product.numberOfReviews;
-  const lc =
-    product.likeCount ??
-    product.like_count ??
-    product.totalLikes ??
-    product.total_likes ??
-    product.reviewLikesTotal ??
-    product.review_likes_total;
   const nRev = rc != null && String(rc).trim() !== '' ? Number(rc) : NaN;
-  const nLike = lc != null && String(lc).trim() !== '' ? Number(lc) : NaN;
-  if (Number.isFinite(nRev) && Number.isFinite(nLike)) {
-    return {
-      reviewCount: Math.max(0, Math.floor(nRev)),
-      totalLikes: Math.max(0, Math.floor(nLike)),
-    };
+  if (Number.isFinite(nRev)) {
+    return { reviewCount: Math.max(0, Math.floor(nRev)) };
   }
   return null;
 }
 
 /**
  * @param {object} product
- * @param {null | { status: 'loading' } | { status: 'error' } | { status: 'ok', reviewCount: number, totalLikes: number }} reviewStats
+ * @param {null | { status: 'loading' } | { status: 'error' } | { status: 'ok', reviewCount: number }} reviewStats
  * @returns {Array<[string, string]>}
  */
 function productMetadataRows(product, reviewStats) {
@@ -89,17 +78,13 @@ function productMetadataRows(product, reviewStats) {
   const imageUrl = getProductImageUrl(product);
 
   let reviewsLabel = '—';
-  let likesLabel = '—';
   if (reviewStats) {
     if (reviewStats.status === 'loading') {
       reviewsLabel = '…';
-      likesLabel = '…';
     } else if (reviewStats.status === 'error') {
       reviewsLabel = '—';
-      likesLabel = '—';
     } else {
       reviewsLabel = String(reviewStats.reviewCount);
-      likesLabel = String(reviewStats.totalLikes);
     }
   }
 
@@ -110,7 +95,6 @@ function productMetadataRows(product, reviewStats) {
     ['Category ID', tagId],
     ['Status', statusLabel],
     ['Reviews', reviewsLabel],
-    ['Likes', likesLabel],
     ['Image URL', imageUrl || '—'],
     ['Created', formatCreatedAt(createdRaw)],
   ];
@@ -150,7 +134,7 @@ const ProductDetail = () => {
   const [saveError, setSaveError] = useState(/** @type {string | null} */ (null));
   const [saving, setSaving] = useState(false);
   const [reviewStats, setReviewStats] = useState(
-    /** @type {null | { status: 'loading' } | { status: 'error' } | { status: 'ok', reviewCount: number, totalLikes: number }} */
+    /** @type {null | { status: 'loading' } | { status: 'error' } | { status: 'ok', reviewCount: number }} */
     (null)
   );
 
@@ -216,11 +200,7 @@ const ProductDetail = () => {
 
     const embedded = tryEmbeddedProductReviewStats(product);
     if (embedded) {
-      setReviewStats({
-        status: 'ok',
-        reviewCount: embedded.reviewCount,
-        totalLikes: embedded.totalLikes,
-      });
+      setReviewStats({ status: 'ok', reviewCount: embedded.reviewCount });
       return;
     }
 
@@ -242,14 +222,8 @@ const ProductDetail = () => {
           return rid != null && String(rid) === pid;
         });
         const reviewCount = forProduct.length;
-        const totalLikes = forProduct.reduce((acc, r) => {
-          const n = r?.likeCount ?? r?.like_count;
-          if (n == null) return acc;
-          const num = Number(n);
-          return acc + (Number.isFinite(num) ? num : 0);
-        }, 0);
         if (!cancelled) {
-          setReviewStats({ status: 'ok', reviewCount, totalLikes });
+          setReviewStats({ status: 'ok', reviewCount });
         }
       } catch (e) {
         if (cancelled) return;

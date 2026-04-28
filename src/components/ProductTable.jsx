@@ -1,6 +1,5 @@
 import '../styles/ProductTable.css';
-import AdminFloatingMenu, { isInsideAdminFloatingMenu } from './AdminFloatingMenu';
-import { useEffect, useId, useRef, useState } from 'react';
+import '../styles/ModerationTable.css';
 import { Link } from 'react-router-dom';
 
 function initialsFromProductName(name) {
@@ -32,39 +31,7 @@ function initialsFromProductName(name) {
  * }} props
  */
 const ProductTable = ({ products, onActivate, onDeactivate, actionBusyId }) => {
-  const menuIdPrefix = useId();
-  const [openRowId, setOpenRowId] = useState(null);
-  const openTriggerRef = useRef(null);
-
-  const busy = actionBusyId != null;
-
-  /** @param {() => void} fn */
-  function runAndClose(fn) {
-    fn();
-    setOpenRowId(null);
-  }
-
-  useEffect(() => {
-    if (openRowId == null) return undefined;
-
-    /** @param {MouseEvent} e */
-    function onPointerDown(e) {
-      const target = e.target instanceof Element ? e.target : null;
-      if (!target) return;
-      if (isInsideAdminFloatingMenu(target)) return;
-      const container = document.querySelector(
-        `[data-products-actions-row-id="${openRowId}"]`
-      );
-      if (!container) {
-        setOpenRowId(null);
-        return;
-      }
-      if (!container.contains(target)) setOpenRowId(null);
-    }
-
-    document.addEventListener('mousedown', onPointerDown, true);
-    return () => document.removeEventListener('mousedown', onPointerDown, true);
-  }, [openRowId]);
+  const anyActionBusy = actionBusyId != null;
 
   return (
     <section className="products-table-wrap" aria-label="Product list">
@@ -89,8 +56,6 @@ const ProductTable = ({ products, onActivate, onDeactivate, actionBusyId }) => {
           <tbody>
             {products.map(({ id, name, category, statusLabel, statusKind, active }) => {
               const isInactive = active === false;
-              const menuId = `${menuIdPrefix}-${id}`;
-              const isOpen = openRowId === id;
               const rowBusy = actionBusyId === id;
               const kind = statusKind ?? 'unknown';
               const initials = initialsFromProductName(name);
@@ -123,52 +88,31 @@ const ProductTable = ({ products, onActivate, onDeactivate, actionBusyId }) => {
                       {statusLabel}
                     </span>
                   </td>
-                  <td>
-                    <div className="products-actions" data-products-actions-row-id={id}>
-                      <button
-                        type="button"
-                        ref={openRowId === id ? openTriggerRef : undefined}
-                        className="products-actions-trigger"
-                        aria-haspopup="menu"
-                        aria-expanded={isOpen}
-                        aria-controls={menuId}
-                        aria-busy={rowBusy}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (rowBusy) return;
-                          setOpenRowId((prev) => (prev === id ? null : id));
-                        }}
-                      >
-                        ⋮
-                      </button>
-                      {isOpen ? (
-                        <AdminFloatingMenu open triggerRef={openTriggerRef} id={menuId}>
-                          <div className="products-actions-menu-inner">
-                            {!isInactive && (
-                              <button
-                                type="button"
-                                className="products-actions-item"
-                                role="menuitem"
-                                disabled={busy}
-                                onClick={() => runAndClose(() => onDeactivate(id))}
-                              >
-                                Deactivate
-                              </button>
-                            )}
-                            {isInactive && (
-                              <button
-                                type="button"
-                                className="products-actions-item"
-                                role="menuitem"
-                                disabled={busy}
-                                onClick={() => runAndClose(() => onActivate(id))}
-                              >
-                                Activate
-                              </button>
-                            )}
-                          </div>
-                        </AdminFloatingMenu>
-                      ) : null}
+                  <td className="products-table-actions-cell">
+                    <div className="moderation-action-group">
+                      {isInactive ? (
+                        <button
+                          type="button"
+                          className="moderation-action-btn moderation-action-btn--approve"
+                          aria-label="Activate product"
+                          aria-busy={rowBusy}
+                          disabled={anyActionBusy}
+                          onClick={() => onActivate(id)}
+                        >
+                          Activate
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="moderation-action-btn moderation-action-btn--reject"
+                          aria-label="Deactivate product"
+                          aria-busy={rowBusy}
+                          disabled={anyActionBusy}
+                          onClick={() => onDeactivate(id)}
+                        >
+                          Deactivate
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

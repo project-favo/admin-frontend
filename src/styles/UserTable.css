@@ -5,6 +5,10 @@
   --users-table-muted: #f5f5f6;
   --users-table-text: #1a1a1a;
   --users-table-text-muted: #5c5c5c;
+  /* Shared with ModerationTable.css for .moderation-action-btn */
+  --moderation-table-border: var(--users-table-border);
+  --moderation-table-surface: var(--users-table-surface);
+  --moderation-table-text: var(--users-table-text);
   width: 100%;
   max-width: min(72rem, 100%);
   padding: 0;
@@ -27,7 +31,7 @@
 
 .users-table {
   width: 100%;
-  min-width: 640px;
+  min-width: 700px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
@@ -182,72 +186,11 @@ a.users-username-link:focus-visible {
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.users-actions {
-  position: relative;
-  display: inline-block;
-}
-
-.users-actions-trigger {
-  display: inline-grid;
-  place-items: center;
-  width: 2.125rem;
-  height: 2.125rem;
-  margin: 0;
-  padding: 0;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  user-select: none;
-  color: var(--users-table-text-muted);
-  font-size: 1.15rem;
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: 0;
-  font-family: inherit;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-.users-actions-trigger:hover {
-  background: rgba(0, 0, 0, 0.06);
-  border-color: rgba(0, 0, 0, 0.06);
-  color: var(--users-table-text);
-}
-
-.users-actions-menu-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 140px;
-}
-
-.users-actions-item {
-  width: 100%;
-  text-align: left;
-  padding: 0.55rem 0.65rem;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--users-table-text);
-  font-size: 0.875rem;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-}
-
-.users-actions-item:hover:not(:disabled) {
-  background: rgba(145, 0, 41, 0.08);
-}
-
-.users-actions-item:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+/* Align with ModerationTable actions column */
+.users-table-actions-cell {
+  vertical-align: top;
+  min-width: 7.25rem;
+  padding-left: 1.15rem !important;
 }
 
 .users-table-col-avatar {
@@ -267,7 +210,8 @@ a.users-username-link:focus-visible {
 }
 
 .users-table-col-actions {
-  width: 4rem;
+  width: 7.5rem;
+  min-width: 7.5rem;
   text-align: right;
 }
 

@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import UserDetail from './pages/UserDetail';
 import Products from './pages/Products';
+import ProductDetail from './pages/ProductDetail';
 import AddProduct from './pages/AddProduct';
 import Moderation from './pages/Moderation';
 import ReviewDetail from './pages/ReviewDetail';
@@ -32,6 +33,7 @@ function App() {
               <Route path="/users/:id" element={<UserDetail />} />
               <Route path="/products" element={<Products />} />
               <Route path="/products/new" element={<AddProduct />} />
+              <Route path="/products/:id" element={<ProductDetail />} />
               <Route path="/moderation" element={<Moderation />} />
               <Route path="/moderation/reviews/:id" element={<ReviewDetail />} />
               <Route path="/settings" element={<Settings />} />

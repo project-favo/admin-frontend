@@ -1,6 +1,7 @@
 import '../styles/ProductTable.css';
 import AdminFloatingMenu, { isInsideAdminFloatingMenu } from './AdminFloatingMenu';
 import { useEffect, useId, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 function initialsFromProductName(name) {
   const s = String(name || '')
@@ -25,21 +26,12 @@ function initialsFromProductName(name) {
 /**
  * @param {{
  *   products: ProductTableRow[];
- *   onView: (id: string) => void;
- *   onEdit: (id: string) => void;
  *   onActivate: (id: string) => void;
  *   onDeactivate: (id: string) => void;
  *   actionBusyId: string | null;
  * }} props
  */
-const ProductTable = ({
-  products,
-  onView,
-  onEdit,
-  onActivate,
-  onDeactivate,
-  actionBusyId,
-}) => {
+const ProductTable = ({ products, onActivate, onDeactivate, actionBusyId }) => {
   const menuIdPrefix = useId();
   const [openRowId, setOpenRowId] = useState(null);
   const openTriggerRef = useRef(null);
@@ -109,7 +101,14 @@ const ProductTable = ({
                       {initials}
                     </span>
                   </td>
-                  <td className="products-cell-name">{name}</td>
+                  <td className="products-cell-name">
+                    <Link
+                      to={`/products/${encodeURIComponent(id)}`}
+                      className="products-name-link"
+                    >
+                      {name}
+                    </Link>
+                  </td>
                   <td className="products-cell-category">{category}</td>
                   <td>
                     <span
@@ -146,35 +145,15 @@ const ProductTable = ({
                         <AdminFloatingMenu open triggerRef={openTriggerRef} id={menuId}>
                           <div className="products-actions-menu-inner">
                             {!isInactive && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="products-actions-item"
-                                  role="menuitem"
-                                  disabled={busy}
-                                  onClick={() => runAndClose(() => onView(id))}
-                                >
-                                  View
-                                </button>
-                                <button
-                                  type="button"
-                                  className="products-actions-item"
-                                  role="menuitem"
-                                  disabled={busy}
-                                  onClick={() => runAndClose(() => onEdit(id))}
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  className="products-actions-item"
-                                  role="menuitem"
-                                  disabled={busy}
-                                  onClick={() => runAndClose(() => onDeactivate(id))}
-                                >
-                                  Deactivate
-                                </button>
-                              </>
+                              <button
+                                type="button"
+                                className="products-actions-item"
+                                role="menuitem"
+                                disabled={busy}
+                                onClick={() => runAndClose(() => onDeactivate(id))}
+                              >
+                                Deactivate
+                              </button>
                             )}
                             {isInactive && (
                               <button

@@ -336,7 +336,7 @@ const Users = () => {
             <input
               type="search"
               className="users-toolbar-search-input"
-              placeholder="Search by username"
+              placeholder="Search by username..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               aria-label="Search users by username"

@@ -311,18 +311,20 @@ function readPageMeta(dto) {
   return { totalElements, totalPages };
 }
 
-function reviewMatchesSearch(review, qLower) {
-  if (!qLower) return true;
-  const previewBody = buildReviewPreviewBody(review).toLowerCase();
-  const productName = String(review?.productName ?? review?.product_name ?? '')
-    .trim()
-    .toLowerCase();
-  return previewBody.includes(qLower) || productName.includes(qLower);
-}
-
 function reviewMatchesReportFilter(review, reportFilter) {
   if (reportFilter !== 'reported') return true;
   return normalizeModerationStatus(review) === 'MANUALLY_FLAGGED';
+}
+
+/** İnceleme metni (başlık+açıklama) ve ürün adı / ürün ID alanlarında alt dizgi araması. */
+function reviewMatchesSearchQuery(review, qLower) {
+  if (!qLower) return true;
+  const body = buildReviewPreviewBody(review);
+  const nameRaw = review?.productName ?? review?.product_name;
+  const idRaw = review?.productId ?? review?.product_id;
+  const parts = [body, nameRaw != null ? String(nameRaw) : '', idRaw != null ? String(idRaw) : ''];
+  const hay = parts.join(' ').toLowerCase();
+  return hay.includes(qLower);
 }
 
 const Moderation = () => {
@@ -362,21 +364,15 @@ const Moderation = () => {
     const silent = pollSilentRef.current;
     pollSilentRef.current = false;
 
-    if (isSearchActive && silent) return;
-
-    if (!silent && !isSearchActive) {
+    if (!silent) {
       setLoading(true);
       setError(null);
       setActionFeedback(null);
     }
-    if (!silent && isSearchActive) {
-      setLoading(true);
-      setError(null);
-    }
 
     (async () => {
       try {
-        if (isSearchActive || scoreFilter !== 'all' || reportFilter !== 'all') {
+        if (scoreFilter !== 'all' || reportFilter !== 'all' || isSearchActive) {
           const all = await fetchAllAdminReviews({
             activeOnly: false,
             pageSize: 200,
@@ -391,7 +387,7 @@ const Moderation = () => {
             filtered = filtered.filter((r) => getReviewScoreTone(r) === scoreFilter);
           }
           if (isSearchActive) {
-            filtered = filtered.filter((r) => reviewMatchesSearch(r, searchTrim));
+            filtered = filtered.filter((r) => reviewMatchesSearchQuery(r, searchTrim));
           }
           const n = filtered.length;
           const tp = n === 0 ? 0 : Math.ceil(n / size);
@@ -436,7 +432,7 @@ const Moderation = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [page, size, scoreFilter, reportFilter, pollTick, listVersion, isSearchActive, searchTrim]);
+  }, [page, size, scoreFilter, reportFilter, searchTrim, isSearchActive, pollTick, listVersion]);
 
   useEffect(() => {
     setPage(0);
@@ -461,7 +457,10 @@ const Moderation = () => {
     !loading &&
     (typeof totalPages === 'number' && totalPages > 0
       ? page + 1 < totalPages
-      : !isSearchActive && scoreFilter === 'all' && reportFilter === 'all' && rows.length === size);
+      : scoreFilter === 'all' &&
+        reportFilter === 'all' &&
+        !isSearchActive &&
+        rows.length === size);
   const pageStatusText = useMemo(() => {
     const tp =
       typeof totalPages === 'number' && totalPages > 0 ? String(totalPages) : '—';
@@ -497,7 +496,7 @@ const Moderation = () => {
         filtered = filtered.filter((r) => getReviewScoreTone(r) === scoreFilter);
       }
       if (isSearchActive) {
-        filtered = filtered.filter((r) => reviewMatchesSearch(r, searchTrim));
+        filtered = filtered.filter((r) => reviewMatchesSearchQuery(r, searchTrim));
       }
       const setsPdf = loadModerationTrackingSets();
       const rows = filtered.map((r, idx) => mapReviewDtoToRow(r, 0, idx, setsPdf));
@@ -510,7 +509,10 @@ const Moderation = () => {
             : scoreFilter === 'mid'
               ? 'AI toxicity: Mid (31–69)'
               : 'AI toxicity: High (70–100)';
-      const searchSuffix = isSearchActive ? ` · Search: "${searchInput.trim()}"` : '';
+      const searchLabel = isSearchActive
+        ? `Search: "${searchInput.trim()}" (content or product)`
+        : null;
+      const extraBits = [scoreLabel, searchLabel].filter(Boolean);
       downloadModerationPdf({
         rows: rows.map(
           ({ contentPreview, productLabel, collaborativeLabel, likeCountDisplay, aiScore }) => ({
@@ -521,7 +523,7 @@ const Moderation = () => {
             aiScore,
           })
         ),
-        filterLabel: `${reportLabel}${scoreLabel ? ` · ${scoreLabel}` : ''}${searchSuffix}`,
+        filterLabel: [reportLabel, ...extraBits].join(' · '),
       });
       setActionFeedback({ ok: true, message: 'PDF downloaded.' });
     } catch (e) {
@@ -683,13 +685,15 @@ const Moderation = () => {
           </div>
           <div className="moderation-toolbar-search">
             <input
+              id="moderation-search"
               type="search"
               className="moderation-toolbar-search-input"
-              placeholder="Search by content preview or product name…"
+              placeholder="Search review or product name…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              aria-label="Search reviews"
               autoComplete="off"
+              enterKeyHint="search"
+              aria-label="Search by review content or product name"
             />
           </div>
           <button
@@ -732,12 +736,12 @@ const Moderation = () => {
             <p className="moderation-empty-title">No reviews to show</p>
             <p className="moderation-empty-hint">
               {isSearchActive
-                ? 'No reviews match this search. Try different keywords.'
+                ? 'No reviews match your search. Try other words in the content or product name.'
                 : reportFilter === 'reported'
                   ? 'There are no user-reported reviews matching this filter.'
                   : scoreFilter === 'all'
-                  ? 'No review records were returned for this page.'
-                  : 'No reviews match this AI toxicity filter (or scores are still pending).'}
+                    ? 'No review records were returned for this page.'
+                    : 'No reviews match this AI toxicity filter (or scores are still pending).'}
             </p>
           </div>
         ) : !error ? (

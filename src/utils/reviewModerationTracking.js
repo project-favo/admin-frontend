@@ -126,3 +126,85 @@ export function computeModerationRowFlags(review, idStr, autoRejected, browserHi
     isAutoRejected,
   };
 }
+
+/**
+ * @param {object} review
+ */
+export function normalizeModerationStatus(review) {
+  return String(review?.moderationStatus ?? review?.moderation_status ?? '')
+    .trim()
+    .toUpperCase();
+}
+
+/** Admin DTO: isActive açıkça false. */
+export function isExplicitlyInactiveInCatalog(review) {
+  const a = review?.isActive ?? review?.active ?? review?.is_active;
+  return a === false || a === 'false' || a === 0;
+}
+
+export function isExplicitlyActiveInCatalog(review) {
+  const a = review?.isActive ?? review?.active ?? review?.is_active;
+  return a === true || a === 'true' || a === 1;
+}
+
+/**
+ * Moderation tablosu ile aynı satır türü (mapReviewDtoToRow ile hizalı).
+ * @param {object} review
+ * @param {{ autoRejected: Set<string>, browserHidden: Set<string> } | null | undefined} [sets] — yoksa localStorage setleri
+ * @returns {'published' | 'rejected' | 'auto_rejected' | 'inactive'}
+ */
+export function getModerationStatusKindForReview(review, sets) {
+  const tracking = sets ?? {
+    autoRejected: loadAutoRejectedIdSet(),
+    browserHidden: loadBrowserHiddenIdSet(),
+  };
+  const rawId = review?.id ?? review?.reviewId;
+  const idStr = rawId != null ? String(rawId) : '0';
+  const hasNumericId =
+    rawId != null && String(rawId).trim() !== '' && Number.isFinite(Number(rawId));
+  const ms = normalizeModerationStatus(review);
+  const explicitInactive = isExplicitlyInactiveInCatalog(review);
+  let kind = /** @type {'published' | 'rejected' | 'auto_rejected' | 'inactive'} */ ('published');
+  if (hasNumericId) {
+    const flags = computeModerationRowFlags(
+      review,
+      idStr,
+      tracking.autoRejected,
+      tracking.browserHidden
+    );
+    if (flags.isAutoRejected) {
+      kind = 'auto_rejected';
+    } else if (flags.hidden) {
+      kind = explicitInactive && ms !== 'REJECTED' ? 'inactive' : 'rejected';
+    } else if (explicitInactive) {
+      kind = 'inactive';
+    }
+  } else if (explicitInactive) {
+    kind = 'inactive';
+  }
+  return kind;
+}
+
+/**
+ * ModerationTable status sütunu ile aynı metin (ve opsiyonel tooltip metni).
+ * @param {'published' | 'rejected' | 'auto_rejected' | 'inactive'} kind
+ * @returns {{ label: string, title?: string }}
+ */
+export function getModerationStatusTableDisplay(kind) {
+  if (kind === 'rejected') {
+    return { label: 'Rejected' };
+  }
+  if (kind === 'auto_rejected') {
+    return {
+      label: 'Rejected',
+      title: 'Hidden automatically by AI toxicity threshold (System settings).',
+    };
+  }
+  if (kind === 'inactive') {
+    return {
+      label: 'Inactive',
+      title: 'Not shown in the catalog: review is deactivated (isActive=false in API).',
+    };
+  }
+  return { label: 'Active' };
+}

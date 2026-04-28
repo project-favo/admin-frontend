@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
  * @property {string} id
  * @property {boolean} [hasNumericId]
  * @property {string | null} [reviewPath]
- * @property {'published'|'rejected'|'auto_rejected'} moderationStatusKind
+ * @property {'published'|'rejected'|'auto_rejected'|'inactive'} moderationStatusKind
  * @property {string} contentPreview
  * @property {string} reviewerLabel
  * @property {string} productLabel
@@ -107,7 +107,7 @@ const ModerationTable = ({
                     ? undefined
                     : 'moderation-table-row--inactive';
 
-                let statusLabel = 'Published';
+                let statusLabel = 'Active';
                 let statusClass = 'moderation-status-pill moderation-status-pill--published';
                 /** @type {string | undefined} */
                 let statusHint;
@@ -119,6 +119,11 @@ const ModerationTable = ({
                   statusClass = 'moderation-status-pill moderation-status-pill--rejected';
                   statusHint =
                     'Hidden automatically by AI toxicity threshold (System settings).';
+                } else if (moderationStatusKind === 'inactive') {
+                  statusLabel = 'Inactive';
+                  statusClass = 'moderation-status-pill moderation-status-pill--inactive';
+                  statusHint =
+                    'Not shown in the catalog: review is deactivated (isActive=false in API).';
                 }
 
                 return (
@@ -157,7 +162,7 @@ const ModerationTable = ({
                         <button
                           type="button"
                           className="moderation-action-btn moderation-action-btn--approve"
-                          aria-label="Approve — publish review"
+                          aria-label="Approve — activate review"
                           disabled={approveDisabled}
                           onClick={() => onApprove(id)}
                         >

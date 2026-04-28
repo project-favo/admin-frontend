@@ -20,9 +20,12 @@ import {
 } from '../utils/reviewToxicityScore';
 import {
   addBrowserHiddenReviewIds,
-  computeModerationRowFlags,
+  getModerationStatusKindForReview,
+  isExplicitlyActiveInCatalog,
+  isExplicitlyInactiveInCatalog,
   loadAutoRejectedIdSet,
   loadBrowserHiddenIdSet,
+  normalizeModerationStatus,
   removeTrackedModerationId,
 } from '../utils/reviewModerationTracking';
 import loadingDots from '../assets/loading-dots.svg';
@@ -138,10 +141,15 @@ function productKeyFromReview(review) {
   return `lbl:${formatProductLabel(review)}`;
 }
 
-function normalizeModerationStatus(review) {
-  return String(review?.moderationStatus ?? review?.moderation_status ?? '')
-    .trim()
-    .toUpperCase();
+/**
+ * @param {object} r
+ * @param {'all' | 'active' | 'inactive'} filter
+ */
+function reviewMatchesCatalogFilter(r, filter) {
+  if (filter === 'all') return true;
+  if (filter === 'active') return isExplicitlyActiveInCatalog(r);
+  if (filter === 'inactive') return isExplicitlyInactiveInCatalog(r);
+  return true;
 }
 
 function getUserReportStatus(review) {
@@ -186,6 +194,22 @@ function getReviewScoreTone(review) {
   const pct = getReviewToxicityPercent(review);
   if (pct == null) return null;
   return aiScoreToneFromPercent(pct);
+}
+
+/**
+ * “Low” filtresi: skor 0% olan kayıtları dışlar (0% sütunda yeşil bantta kalsa da yalnız “All”da listelenir).
+ * @param {object} r
+ * @param {'all' | 'low' | 'mid' | 'high'} filter
+ */
+function reviewMatchesScoreFilter(r, filter) {
+  if (filter === 'all') return true;
+  const tone = getReviewScoreTone(r);
+  if (filter === 'low') {
+    if (tone !== 'low') return false;
+    const pct = getReviewToxicityPercent(r);
+    return Number.isFinite(pct) && pct > 0;
+  }
+  return tone === filter;
 }
 
 /**
@@ -253,21 +277,7 @@ function mapReviewDtoToRow(r, pageNum, idx, sets) {
     rawId != null && String(rawId).trim() !== '' && Number.isFinite(Number(rawId));
   const { display, title, scoreTone } = formatAiScoreFromReview(r);
   const reportStatus = getUserReportStatus(r);
-
-  let moderationStatusKind = /** @type {'published' | 'rejected' | 'auto_rejected'} */ (
-    'published'
-  );
-  if (hasNumericId) {
-    const flags = computeModerationRowFlags(
-      r,
-      idStr,
-      tracking.autoRejected,
-      tracking.browserHidden
-    );
-    if (flags.hidden) {
-      moderationStatusKind = flags.isAutoRejected ? 'auto_rejected' : 'rejected';
-    }
-  }
+  const moderationStatusKind = getModerationStatusKindForReview(r, tracking);
 
   return {
     id: idStr,
@@ -334,6 +344,7 @@ const Moderation = () => {
     /** @type {'all' | 'low' | 'mid' | 'high'} */ ('all')
   );
   const [reportFilter, setReportFilter] = useState(/** @type {'all' | 'reported'} */ ('all'));
+  const [catalogFilter, setCatalogFilter] = useState(/** @type {'all' | 'active' | 'inactive'} */ ('all'));
   const [rows, setRows] = useState([]);
   const [totalElements, setTotalElements] = useState(null);
   const [totalPages, setTotalPages] = useState(null);
@@ -349,6 +360,42 @@ const Moderation = () => {
 
   const searchTrim = useMemo(() => searchInput.trim().toLowerCase(), [searchInput]);
   const isSearchActive = searchTrim.length > 0;
+
+  const moderationTotalPillLabel = useMemo(() => {
+    if (reportFilter === 'all' && scoreFilter === 'all' && catalogFilter === 'all') {
+      return 'All reviews';
+    }
+    if (reportFilter === 'reported' && scoreFilter === 'all' && catalogFilter === 'all') {
+      return 'Reported reviews';
+    }
+    const parts = [];
+    if (reportFilter === 'reported') parts.push('Reported');
+    if (catalogFilter === 'active') parts.push('Active');
+    if (catalogFilter === 'inactive') parts.push('Inactive');
+    if (scoreFilter === 'low') parts.push('Low (1–30)');
+    if (scoreFilter === 'mid') parts.push('Mid (31–69)');
+    if (scoreFilter === 'high') parts.push('High (70–100)');
+    return parts.length > 0 ? parts.join(' · ') : 'All reviews';
+  }, [reportFilter, scoreFilter, catalogFilter]);
+
+  const moderationEmptyHint = useMemo(() => {
+    if (isSearchActive) {
+      return 'No reviews match your search. Try other words in the content or product name.';
+    }
+    if (reportFilter === 'reported') {
+      return 'There are no user-reported reviews matching this filter.';
+    }
+    if (scoreFilter !== 'all') {
+      return 'No reviews match this AI toxicity filter (or scores are still pending).';
+    }
+    if (catalogFilter === 'active') {
+      return 'No active reviews in the catalog (isActive=true) for this list.';
+    }
+    if (catalogFilter === 'inactive') {
+      return 'No inactive reviews in the catalog (isActive=false) for this list.';
+    }
+    return 'No review records were returned for this page.';
+  }, [isSearchActive, reportFilter, scoreFilter, catalogFilter]);
 
   useEffect(() => {
     const t = window.setInterval(() => {
@@ -372,9 +419,17 @@ const Moderation = () => {
 
     (async () => {
       try {
-        if (scoreFilter !== 'all' || reportFilter !== 'all' || isSearchActive) {
+        const needsFullListFetch =
+          scoreFilter !== 'all' ||
+          reportFilter !== 'all' ||
+          isSearchActive ||
+          catalogFilter === 'inactive' ||
+          (catalogFilter === 'active' &&
+            (scoreFilter !== 'all' || reportFilter !== 'all' || isSearchActive));
+
+        if (needsFullListFetch) {
           const all = await fetchAllAdminReviews({
-            activeOnly: false,
+            activeOnly: catalogFilter === 'active',
             pageSize: 200,
             signal: controller.signal,
           });
@@ -383,8 +438,11 @@ const Moderation = () => {
           if (reportFilter !== 'all') {
             filtered = filtered.filter((r) => reviewMatchesReportFilter(r, reportFilter));
           }
+          if (catalogFilter !== 'all') {
+            filtered = filtered.filter((r) => reviewMatchesCatalogFilter(r, catalogFilter));
+          }
           if (scoreFilter !== 'all') {
-            filtered = filtered.filter((r) => getReviewScoreTone(r) === scoreFilter);
+            filtered = filtered.filter((r) => reviewMatchesScoreFilter(r, scoreFilter));
           }
           if (isSearchActive) {
             filtered = filtered.filter((r) => reviewMatchesSearchQuery(r, searchTrim));
@@ -401,7 +459,7 @@ const Moderation = () => {
           const res = await listAdminReviews({
             page,
             size,
-            activeOnly: false,
+            activeOnly: catalogFilter === 'active',
             signal: controller.signal,
           });
           if (cancelled) return;
@@ -432,11 +490,15 @@ const Moderation = () => {
       cancelled = true;
       controller.abort();
     };
-  }, [page, size, scoreFilter, reportFilter, searchTrim, isSearchActive, pollTick, listVersion]);
+  }, [page, size, scoreFilter, reportFilter, catalogFilter, searchTrim, isSearchActive, pollTick, listVersion]);
 
   useEffect(() => {
     setPage(0);
   }, [searchTrim]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [catalogFilter]);
 
   useEffect(() => {
     if (loading) return;
@@ -459,6 +521,7 @@ const Moderation = () => {
       ? page + 1 < totalPages
       : scoreFilter === 'all' &&
         reportFilter === 'all' &&
+        (catalogFilter === 'all' || catalogFilter === 'active') &&
         !isSearchActive &&
         rows.length === size);
   const pageStatusText = useMemo(() => {
@@ -486,14 +549,17 @@ const Moderation = () => {
     setExporting(true);
     try {
       const reviews = await fetchAllAdminReviews({
-        activeOnly: false,
+        activeOnly: catalogFilter === 'active',
       });
       let filtered = reviews;
       if (reportFilter !== 'all') {
         filtered = filtered.filter((r) => reviewMatchesReportFilter(r, reportFilter));
       }
+      if (catalogFilter !== 'all') {
+        filtered = filtered.filter((r) => reviewMatchesCatalogFilter(r, catalogFilter));
+      }
       if (scoreFilter !== 'all') {
-        filtered = filtered.filter((r) => getReviewScoreTone(r) === scoreFilter);
+        filtered = filtered.filter((r) => reviewMatchesScoreFilter(r, scoreFilter));
       }
       if (isSearchActive) {
         filtered = filtered.filter((r) => reviewMatchesSearchQuery(r, searchTrim));
@@ -501,18 +567,24 @@ const Moderation = () => {
       const setsPdf = loadModerationTrackingSets();
       const rows = filtered.map((r, idx) => mapReviewDtoToRow(r, 0, idx, setsPdf));
       const reportLabel = reportFilter === 'reported' ? 'Reported reviews' : 'All reviews';
+      const catalogLabel =
+        catalogFilter === 'all'
+          ? null
+          : catalogFilter === 'active'
+            ? 'Catalog: active only (isActive=true)'
+            : 'Catalog: inactive only (isActive=false)';
       const scoreLabel =
         scoreFilter === 'all'
           ? null
           : scoreFilter === 'low'
-            ? 'AI toxicity: Low (0–30)'
+            ? 'AI toxicity: Low (1–30, excludes 0%)'
             : scoreFilter === 'mid'
               ? 'AI toxicity: Mid (31–69)'
               : 'AI toxicity: High (70–100)';
       const searchLabel = isSearchActive
         ? `Search: "${searchInput.trim()}" (content or product)`
         : null;
-      const extraBits = [scoreLabel, searchLabel].filter(Boolean);
+      const extraBits = [catalogLabel, scoreLabel, searchLabel].filter(Boolean);
       downloadModerationPdf({
         rows: rows.map(
           ({ contentPreview, productLabel, collaborativeLabel, likeCountDisplay, aiScore }) => ({
@@ -548,7 +620,7 @@ const Moderation = () => {
       }
       removeTrackedModerationId(id);
       setListVersion((v) => v + 1);
-      setActionFeedback({ ok: true, message: 'Review approved (published).' });
+      setActionFeedback({ ok: true, message: 'Review approved; review is now active.' });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unknown error';
       setActionFeedback({ ok: false, message });
@@ -584,7 +656,7 @@ const Moderation = () => {
         <header className="moderation-header">
           <h2 className="moderation-main-title">Content moderation</h2>
           <p className="moderation-subtitle">
-            Review queued content, monitor user-reported comments, and publish or hide reviews.
+            Review queued content, monitor user-reported comments, and activate or hide reviews.
           </p>
         </header>
 
@@ -593,29 +665,13 @@ const Moderation = () => {
             className="moderation-total-pill"
             title="Total reviews matching the current filter"
           >
-            <span className="moderation-total-pill-label">
-              {reportFilter === 'reported'
-                ? scoreFilter === 'all'
-                  ? 'Reported reviews'
-                  : scoreFilter === 'low'
-                    ? 'Reported · Low (0–30)'
-                    : scoreFilter === 'mid'
-                      ? 'Reported · Mid (31–69)'
-                      : 'Reported · High (70–100)'
-                : scoreFilter === 'all'
-                  ? 'All reviews'
-                  : scoreFilter === 'low'
-                    ? 'Low (0–30)'
-                    : scoreFilter === 'mid'
-                      ? 'Mid (31–69)'
-                      : 'High (70–100)'}
-            </span>
+            <span className="moderation-total-pill-label">{moderationTotalPillLabel}</span>
             <span className="moderation-total-pill-value" aria-live="polite">
               {loading && formattedTotal == null ? '…' : formattedTotal ?? '—'}
             </span>
           </div>
           <div
-            className="moderation-filter-segment"
+            className="moderation-filter-segment moderation-filter-segment--report"
             role="group"
             aria-label="Filter by report status"
           >
@@ -653,13 +709,51 @@ const Moderation = () => {
             </button>
           </div>
           <div
+            className="moderation-filter-segment moderation-filter-segment--catalog"
+            role="group"
+            aria-label="Filter by catalog activity (isActive from API)"
+          >
+            {[
+              ['all', 'All', 'All reviews, active and inactive in catalog'],
+              ['active', 'Active', 'isActive true — review is shown in the catalog'],
+              [
+                'inactive',
+                'Inactive',
+                'isActive false — review is hidden / deactivated in the catalog',
+              ],
+            ].map(([id, label, hint]) => (
+              <button
+                key={id}
+                type="button"
+                className={
+                  catalogFilter === id
+                    ? 'moderation-filter-segment-btn moderation-filter-segment-btn--active'
+                    : 'moderation-filter-segment-btn'
+                }
+                title={hint}
+                onClick={() => {
+                  if (catalogFilter === id) return;
+                  setPage(0);
+                  setCatalogFilter(/** @type {'all' | 'active' | 'inactive'} */ (id));
+                }}
+                disabled={loading}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div
             className="moderation-filter-segment moderation-filter-segment--score"
             role="group"
             aria-label="Filter by AI toxicity band"
           >
             {[
               ['all', 'All', 'All reviews'],
-              ['low', '🟢 Low', 'AI toxicity band 0–30'],
+              [
+                'low',
+                '🟢 Low',
+                'AI toxicity 1–30% (0% scores only appear under “All”)',
+              ],
               ['mid', '🟠 Mid', 'AI toxicity band 31–69'],
               ['high', '🔴 High', 'AI toxicity band 70–100'],
             ].map(([id, label, hint]) => (
@@ -734,15 +828,7 @@ const Moderation = () => {
         ) : !error && rows.length === 0 ? (
           <div className="moderation-empty" role="status">
             <p className="moderation-empty-title">No reviews to show</p>
-            <p className="moderation-empty-hint">
-              {isSearchActive
-                ? 'No reviews match your search. Try other words in the content or product name.'
-                : reportFilter === 'reported'
-                  ? 'There are no user-reported reviews matching this filter.'
-                  : scoreFilter === 'all'
-                    ? 'No review records were returned for this page.'
-                    : 'No reviews match this AI toxicity filter (or scores are still pending).'}
-            </p>
+            <p className="moderation-empty-hint">{moderationEmptyHint}</p>
           </div>
         ) : !error ? (
           <>

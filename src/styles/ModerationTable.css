@@ -358,6 +358,12 @@
   border: 1px solid rgba(185, 28, 28, 0.22);
 }
 
+.moderation-status-pill--inactive {
+  color: #4b5563;
+  background: rgba(75, 85, 99, 0.1);
+  border: 1px solid rgba(75, 85, 99, 0.25);
+}
+
 .moderation-status-pill--auto {
   color: #7c2d12;
   background: rgba(234, 88, 12, 0.12);

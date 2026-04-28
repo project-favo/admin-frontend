@@ -11,6 +11,11 @@ import {
   extractToxicityScore,
   toxicityToPercent,
 } from '../utils/reviewToxicityScore';
+import {
+  getModerationStatusKindForReview,
+  getModerationStatusTableDisplay,
+  normalizeModerationStatus,
+} from '../utils/reviewModerationTracking';
 import '../styles/ReviewDetail.css';
 import loadingDots from '../assets/loading-dots.svg';
 
@@ -92,19 +97,6 @@ function formatLikeCount(review) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(num);
 }
 
-function normalizeModerationStatus(review) {
-  return String(review?.moderationStatus ?? review?.moderation_status ?? '')
-    .trim()
-    .toUpperCase();
-}
-
-function moderationStatusLabel(review) {
-  const s = normalizeModerationStatus(review);
-  if (s === 'MANUALLY_FLAGGED') return 'Reported';
-  if (!s) return '—';
-  return s;
-}
-
 function formatAiScore(review) {
   const raw = extractToxicityScore(review);
   let pct = toxicityToPercent(raw);
@@ -170,6 +162,7 @@ const ReviewDetail = () => {
 
   const detailRows = useMemo(() => {
     if (!review) return [];
+    const mod = getModerationStatusTableDisplay(getModerationStatusKindForReview(review));
     return [
       ['Review ID', String(review?.id ?? review?.reviewId ?? id ?? '—')],
       ['User', formatReviewerLabel(review)],
@@ -179,7 +172,7 @@ const ReviewDetail = () => {
       ['Likes', formatLikeCount(review)],
       ['Collaborative', formatCollaborative(review)],
       ['Rating', review?.rating != null ? String(review.rating) : '—'],
-      ['Moderation status', moderationStatusLabel(review)],
+      ['Moderation status', mod.label, mod.title],
       ['Created', formatDateTime(review?.createdAt ?? review?.created_at)],
     ];
   }, [review, id]);
@@ -221,12 +214,17 @@ const ReviewDetail = () => {
             <section className="review-detail-card">
               <h2 className="review-detail-section-title">Metadata</h2>
               <dl className="review-detail-dl">
-                {detailRows.map(([k, v]) => (
-                  <div key={k} className="review-detail-row">
-                    <dt>{k}</dt>
-                    <dd>{v}</dd>
-                  </div>
-                ))}
+                {detailRows.map((row) => {
+                  const k = row[0];
+                  const v = row[1];
+                  const valueTitle = row[2];
+                  return (
+                    <div key={k} className="review-detail-row">
+                      <dt>{k}</dt>
+                      <dd title={valueTitle}>{v}</dd>
+                    </div>
+                  );
+                })}
               </dl>
             </section>
           </div>

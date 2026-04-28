@@ -109,6 +109,9 @@ const UserDetail = () => {
 
   const [userReviews, setUserReviews] = useState(/** @type {unknown[]} */ ([]));
   const [reviewsError, setReviewsError] = useState(null);
+  const [reviewsPage, setReviewsPage] = useState(0);
+  const [reviewsHasMore, setReviewsHasMore] = useState(false);
+  const [reviewsLoadingMore, setReviewsLoadingMore] = useState(false);
   const [activityLoading, setActivityLoading] = useState(true);
 
   const [wishlistItems, setWishlistItems] = useState(/** @type {unknown[]} */ ([]));
@@ -119,6 +122,30 @@ const UserDetail = () => {
 
   const [avatarError, setAvatarError] = useState(false);
   const [avatarPhase, setAvatarPhase] = useState(0);
+
+  const handleLoadMoreReviews = async () => {
+    if (reviewsLoadingMore || !reviewsHasMore) return;
+    const nextPage = reviewsPage + 1;
+    setReviewsLoadingMore(true);
+    try {
+      const selfId = sessionUser?.id ?? sessionUser?.userId;
+      const isViewingSelf = selfId != null && idParam != null && String(selfId) === String(idParam);
+      const rRev = isViewingSelf
+        ? await getMyReviews({ page: nextPage })
+        : await listReviewsByUserId(idParam, { page: nextPage });
+      if (rRev.ok) {
+        const data = await rRev.json();
+        const items = Array.isArray(data) ? data : (data?.content ?? []);
+        setUserReviews((prev) => [...prev, ...items]);
+        setReviewsPage(nextPage);
+        setReviewsHasMore(Array.isArray(data) ? false : !(data?.last ?? true));
+      }
+    } catch {
+      // sessizce geç, mevcut liste bozulmasın
+    } finally {
+      setReviewsLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     if (idParam == null || idParam === '') {
@@ -176,6 +203,8 @@ const UserDetail = () => {
     let cancelled = false;
     setActivityLoading(true);
     setReviewsError(null);
+    setReviewsPage(0);
+    setReviewsHasMore(false);
     setWishlistError(null);
     setFlaggedProductsError(null);
 
@@ -191,7 +220,9 @@ const UserDetail = () => {
 
         if (rRev.ok) {
           const data = await rRev.json();
-          setUserReviews(Array.isArray(data) ? data : []);
+          const items = Array.isArray(data) ? data : (data?.content ?? []);
+          setUserReviews(items);
+          setReviewsHasMore(Array.isArray(data) ? false : !(data?.last ?? true));
         } else {
           setUserReviews([]);
           setReviewsError(await messageFromFailedResponse(rRev).catch(() => 'Could not load reviews.'));
@@ -401,6 +432,7 @@ const UserDetail = () => {
               ) : userReviews.length === 0 ? (
                 <p className="user-detail-activity-empty">No reviews for this user.</p>
               ) : (
+                <>
                 <ul className="user-detail-activity-list">
                   {userReviews.map((r, idx) => {
                     const id = r?.id ?? r?.reviewId;
@@ -428,6 +460,16 @@ const UserDetail = () => {
                     );
                   })}
                 </ul>
+                {reviewsHasMore && (
+                  <button
+                    className="user-detail-load-more"
+                    onClick={handleLoadMoreReviews}
+                    disabled={reviewsLoadingMore}
+                  >
+                    {reviewsLoadingMore ? 'Loading…' : 'Load more'}
+                  </button>
+                )}
+                </>
               )}
                 </section>
 

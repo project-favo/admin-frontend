@@ -219,8 +219,9 @@ export async function getAdminUserFlaggedProducts(
  * GET /api/reviews/me — giriş yapan kullanıcının kendi yorumları (en yeni önce).
  * @see com.favo.backend.controller.ReviewController#getMyReviews
  */
-export async function getMyReviews({ signal } = {}) {
-  return apiFetch('/api/reviews/me', {
+export async function getMyReviews({ page = 0, size = 20, signal } = {}) {
+  const qs = new URLSearchParams({ page: String(page), size: String(size) });
+  return apiFetch(`/api/reviews/me?${qs.toString()}`, {
     method: 'GET',
     signal,
     forceIdTokenRefresh: true,
@@ -231,8 +232,9 @@ export async function getMyReviews({ signal } = {}) {
  * GET /api/reviews/user/{userId} — belirli kullanıcının (aktif) yorumları.
  * @see com.favo.backend.controller.ReviewController#getReviewsByUser
  */
-export async function listReviewsByUserId(userId, { signal } = {}) {
-  return apiFetch(`/api/reviews/user/${encodeURIComponent(String(userId))}`, {
+export async function listReviewsByUserId(userId, { page = 0, size = 20, signal } = {}) {
+  const qs = new URLSearchParams({ page: String(page), size: String(size) });
+  return apiFetch(`/api/reviews/user/${encodeURIComponent(String(userId))}?${qs.toString()}`, {
     method: 'GET',
     signal,
     forceIdTokenRefresh: true,

@@ -356,6 +356,27 @@
   border-radius: 4px;
 }
 
+.user-detail-load-more {
+  display: block;
+  margin: 0.85rem auto 0;
+  padding: 0.45rem 1.2rem;
+  background: transparent;
+  border: 1px solid var(--ud-border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: var(--ud-text-muted, #6b7280);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.user-detail-load-more:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: #9ca3af;
+}
+.user-detail-load-more:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 500px) {
   .user-detail-row {
     grid-template-columns: 1fr;

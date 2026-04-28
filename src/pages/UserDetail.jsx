@@ -78,6 +78,84 @@ function buildReviewPreview(r) {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {string | null} data: URL for img src, or null
+ */
+function dataUrlFromProfilePhotoData(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    const t = raw.trim();
+    if (t === '') return null;
+    if (/^data:/i.test(t)) return t;
+    return `data:image/png;base64,${t}`;
+  }
+  return null;
+}
+
+/**
+ * Öncelik: giriş adı (userName / username / handle) → ad soyad → görünen ad → e-posta local → id.
+ * @param {object} params
+ * @param {unknown} params.user
+ * @param {string} params.displayName
+ * @param {string} params.usernameLine
+ * @returns {string}
+ */
+function userAvatarInitials({ user, displayName, usernameLine }) {
+  if (user && typeof user === 'object') {
+    const login = [user.userName, user.username, user.handle]
+      .map((x) => (x == null ? '' : String(x).replace(/^@/, '').trim()))
+      .find((s) => s.length > 0);
+    if (login) {
+      const alnum = login.replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ]/g, '');
+      if (alnum.length >= 2) return alnum.slice(0, 2).toUpperCase();
+      if (alnum.length === 1) return (alnum + alnum).toUpperCase();
+    }
+    const a = user.name != null ? String(user.name).trim() : '';
+    const b = user.surname != null ? String(user.surname).trim() : '';
+    if (a && b) return (a.charAt(0) + b.charAt(0)).toUpperCase();
+    if (a) {
+      const t = a.replace(/\s+/g, ' ').split(' ').filter(Boolean);
+      if (t.length >= 2) return (t[0].charAt(0) + t[1].charAt(0)).toUpperCase();
+      if (a.length >= 2) return a.slice(0, 2).toUpperCase();
+      if (a.length === 1) return a.toUpperCase();
+    }
+  }
+  if (displayName && displayName !== '—') {
+    const parts = displayName.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+    if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+  }
+  const fromLabel = String(usernameLine)
+    .replace(/^@/, '')
+    .replace(/[._-]+/g, ' ')
+    .trim();
+  if (fromLabel && fromLabel !== '—' && fromLabel.length >= 2) {
+    if (/\s/.test(fromLabel)) {
+      const w = fromLabel.split(/\s+/).filter(Boolean);
+      if (w.length >= 2) return (w[0].charAt(0) + w[1].charAt(0)).toUpperCase();
+    }
+    return fromLabel.replace(/\s/g, '').slice(0, 2).toUpperCase();
+  }
+  if (fromLabel && fromLabel !== '—' && fromLabel.length === 1) {
+    return fromLabel.toUpperCase();
+  }
+  if (user && typeof user === 'object' && user.email != null) {
+    const local = String(user.email).split('@')[0]?.replace(/[^a-zA-Z0-9]/g, '') ?? '';
+    if (local.length >= 2) return local.slice(0, 2).toUpperCase();
+    if (local.length === 1) return local.toUpperCase();
+  }
+  if (user && typeof user === 'object') {
+    const id = user.id ?? user.userId;
+    if (id != null && String(id).trim() !== '') {
+      const s = String(id);
+      if (s.length >= 2) return s.replace(/\D/g, '').slice(-2) || s.slice(0, 2);
+      return `U${s}`;
+    }
+  }
+  return '?';
+}
+
+/**
  * GET /api/admin/users/{id}/wishlist hatalarını sarı satır metnine çevirir.
  * @param {Response} res
  * @param {string} routeHint
@@ -295,12 +373,28 @@ const UserDetail = () => {
   const kind = user ? toStatusKind(user) : 'unknown';
   const statusLabel = user ? statusLabelFromKind(kind) : '—';
 
+  const profilePhotoDataUrl = user
+    ? dataUrlFromProfilePhotoData(
+        user.profilePhotoData ?? user.profileImageData
+      )
+    : null;
+  // API `profilePhotoData: null` → gerçekten yüklenmiş foto yok; buna rağmen gelen profileImageUrl genelde
+  // eski/ölü yol, kırık img ikonu verir (onError da tetiklenmeyebilir). Gömülü veri yoksa o URL'ye güvenme.
+  const noUploadedPhotoInPayload =
+    user && user.profilePhotoData === null && !profilePhotoDataUrl;
   const avatarResolved = user ? resolveResourceUrl(user.profileImageUrl) : null;
+  const canUseProfileImageUrl =
+    !noUploadedPhotoInPayload &&
+    user?.profileImageUrl != null &&
+    String(user.profileImageUrl).trim() !== '' &&
+    Boolean(avatarResolved);
+  const hasProfileImage = Boolean(profilePhotoDataUrl) || canUseProfileImageUrl;
+  const avatarInitials = user ? userAvatarInitials({ user, displayName, usernameLine: username }) : '?';
   const avatarSrc =
-    avatarError || !idParam
+    avatarError || !idParam || !hasProfileImage
       ? null
       : avatarPhase === 0
-        ? avatarResolved || buildUserProfileImageUrl(idParam)
+        ? profilePhotoDataUrl || (canUseProfileImageUrl ? avatarResolved : null)
         : buildUserProfileImageUrl(idParam);
 
   const sessionId = sessionUser?.id ?? sessionUser?.userId;
@@ -346,7 +440,7 @@ const UserDetail = () => {
                     src={avatarSrc}
                     alt=""
                     onError={() => {
-                      if (avatarPhase === 0 && user?.profileImageUrl) {
+                      if (avatarPhase === 0 && hasProfileImage) {
                         setAvatarPhase(1);
                         return;
                       }
@@ -354,12 +448,14 @@ const UserDetail = () => {
                     }}
                   />
                 ) : (
-                  <div className="user-detail-photo-placeholder" aria-hidden>
-                    {String(username)
-                      .replace(/^@/, '')
-                      .trim()
-                      .slice(0, 2)
-                      .toUpperCase() || '?'}
+                  <div
+                    className="user-detail-photo-placeholder"
+                    role="img"
+                    aria-label={hasProfileImage ? 'Profile image unavailable' : 'No profile photo'}
+                  >
+                    <span className="user-detail-photo-initials" aria-hidden>
+                      {avatarInitials}
+                    </span>
                   </div>
                 )}
                 <div className="user-detail-hero-text">
